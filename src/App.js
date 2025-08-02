@@ -122,6 +122,7 @@ const DataUploader = ({ onUploadComplete }) => {
         Papa.parse(file, {
             header: true,
             skipEmptyLines: true,
+            delimiter: ";", // Adicionado para garantir a leitura correta do seu ficheiro
             complete: async (results) => {
                 const products = results.data;
                 const total = products.length;
@@ -130,8 +131,9 @@ const DataUploader = ({ onUploadComplete }) => {
                 const productsRef = collection(db, "products");
                 const batch = writeBatch(db);
                 
-                products.forEach((product, index) => {
+                products.forEach((product) => {
                     const newProductRef = doc(productsRef);
+                    // Mapeamento dos nomes das colunas do seu ficheiro CSV
                     const formattedProduct = {
                         produto: product.Produto || '',
                         tipo: product.Tipo || '',
