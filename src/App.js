@@ -2,7 +2,9 @@ import React, { useState, useEffect } from 'react';
 // Importações do Firebase
 import { initializeApp } from "firebase/app";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "firebase/auth";
-import { getFirestore, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, getDocs, query, limit } from "firebase/firestore";
+import { getFirestore, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, getDocs, query, limit, writeBatch } from "firebase/firestore";
+// Importação da biblioteca para ler ficheiros CSV
+import Papa from 'papaparse';
 
 // --- Configuração do Firebase ---
 const firebaseConfig = {
@@ -19,21 +21,6 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-
-// --- Dados Iniciais da Planilha para Importação Automática ---
-// Estes dados serão carregados no seu banco de dados na primeira execução
-const initialData = [
-    { produto: "HP 500D", tipo: "PP Homo", indiceFluidez: "0.8", densidade: "", aplicacao: "Extrusão geral (fita de arquear, perfis, chapas e outros)", refAntiga: { produto: "GE 7100", fabricante: "Polibrasil", fluidez: "" }, refImportada: { produto: "GE 6100", indiceFluidez: "0.7", densidade: "", fabricante: "PETROKEN" }, talco: "", va: "", observacoes: "" },
-    { produto: "H 603", tipo: "PP Homo", indiceFluidez: "1.5", densidade: "", aplicacao: "Embalagem de ráfia, Extrusão geral (fita de arquear, perfis, chapas e outros), Frascos soprados", refAntiga: { produto: "HP 500G", fabricante: "Quattor", fluidez: "" }, refImportada: { produto: "HY6100", indiceFluidez: "1.8", densidade: "", fabricante: "PETROKEN" }, talco: "", va: "", observacoes: "" },
-    { produto: "H 604", tipo: "PP Homo", indiceFluidez: "1.5", densidade: "", aplicacao: "Embalagens termoformadas e descartáveis, Extrusão geral (fita de arquear, perfis, chapas e outros), Frascos soprados", refAntiga: { produto: "HP 640H", fabricante: "Quattor", fluidez: "" }, refImportada: { produto: "", indiceFluidez: "", densidade: "", fabricante: "" }, talco: "", va: "", observacoes: "" },
-    { produto: "H 501HC", tipo: "PP Homo", indiceFluidez: "3.5", densidade: "", aplicacao: "Embalagens termoformadas e descartáveis", refAntiga: { produto: "HA 722J", fabricante: "Polibrasil", fluidez: "" }, refImportada: { produto: "500P", indiceFluidez: "3", densidade: "", fabricante: "SABIC" }, talco: "", va: "", observacoes: "" },
-    { produto: "H 503HS", tipo: "PP Homo", indiceFluidez: "4", densidade: "", aplicacao: "Embalagem de ráfia", refAntiga: { produto: "HP 550K", fabricante: "Quattor", fluidez: "" }, refImportada: { produto: "H-030SG", indiceFluidez: "3.4", densidade: "", fabricante: "RELIANCE" }, talco: "", va: "", observacoes: "" },
-    { produto: "CP 241", tipo: "PP Copo", indiceFluidez: "25", densidade: "", aplicacao: "Peças de parede fina, Utilidades domésticas", refAntiga: { produto: "CP 200HC", fabricante: "Quattor", fluidez: "" }, refImportada: { produto: "Moplen 3830", indiceFluidez: "25", densidade: "", fabricante: "RELIANCE" }, talco: "", va: "", observacoes: "" },
-    { produto: "EP 440L", tipo: "PP Copo", indiceFluidez: "1.7", densidade: "", aplicacao: "Termoformagem, Extrusão de chapas", refAntiga: { produto: "EP 440L", fabricante: "Polibrasil", fluidez: "" }, refImportada: { produto: "RP 225M", indiceFluidez: "1.7", densidade: "", fabricante: "RELIANCE" }, talco: "", va: "", observacoes: "" },
-    { produto: "SM 350", tipo: "PP Raco", indiceFluidez: "35", densidade: "", aplicacao: "Utilidades domésticas, Peças automotivas, Eletrodomésticos", refAntiga: { produto: "SM 350", fabricante: "Braskem", fluidez: "" }, refImportada: { produto: "4100N", indiceFluidez: "35", densidade: "", fabricante: "REPSOL" }, talco: "", va: "", observacoes: "" },
-    { produto: "U 249", tipo: "PS", indiceFluidez: "19", densidade: "", aplicacao: "Brinquedos, Utilidade Doméstica, Artigos escolares, Cabides", refAntiga: { produto: "145 D", fabricante: "", fluidez: "" }, refImportada: { produto: "N 1821", indiceFluidez: "20", densidade: "", fabricante: "Videolar" }, talco: "", va: "", observacoes: "Antigo N 2380" }
-];
-
 
 // --- Estilos ---
 const styles = {
@@ -83,12 +70,17 @@ const styles = {
   loginTitle: { color: '#fff', textAlign: 'center', marginBottom: '30px' },
   loginError: { color: '#f44336', textAlign: 'center', marginBottom: '15px' },
   loginToggle: { color: '#007AFF', textAlign: 'center', cursor: 'pointer', marginTop: '20px' },
-  loadingScreen: { display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', color: 'white', fontSize: '18px' }
+  loadingScreen: { display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', color: 'white', fontSize: '18px' },
+  uploaderContainer: { display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100vh', color: 'white', textAlign: 'center', padding: '20px' },
+  uploaderBox: { backgroundColor: '#2c2c2e', padding: '40px', borderRadius: '12px', boxShadow: '0 5px 15px rgba(0,0,0,0.5)'},
+  fileInput: { display: 'none' },
+  fileInputLabel: { backgroundColor: '#007AFF', color: 'white', padding: '15px 30px', borderRadius: '8px', cursor: 'pointer', display: 'inline-block', marginBottom: '20px' },
+  progressText: { marginTop: '20px', fontSize: '16px' }
 };
 
 // --- Componentes ---
 
-const LoginScreen = () => {
+const LoginScreen = ({ onLogin }) => {
     const [isLogin, setIsLogin] = useState(true);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -97,10 +89,15 @@ const LoginScreen = () => {
     const handleAuth = async () => {
         setError('');
         try {
-            if (isLogin) await signInWithEmailAndPassword(auth, email, password);
-            else await createUserWithEmailAndPassword(auth, email, password);
+            let userCredential;
+            if (isLogin) {
+                userCredential = await signInWithEmailAndPassword(auth, email, password);
+            } else {
+                userCredential = await createUserWithEmailAndPassword(auth, email, password);
+            }
+            onLogin(userCredential.user);
         } catch (err) {
-            if (err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found') setError('Email ou senha inválidos.');
+            if (err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') setError('Email ou senha inválidos.');
             else if (err.code === 'auth/email-already-in-use') setError('Este email já está cadastrado.');
             else setError('Ocorreu um erro. Tente novamente.');
         }
@@ -111,29 +108,84 @@ const LoginScreen = () => {
     );
 };
 
-const FilterModal = ({ show, onClose, onApply, onClear, currentFilters }) => {
-  const [filters, setFiltersState] = useState(currentFilters);
-  useEffect(() => { setFiltersState(currentFilters); }, [currentFilters, show]);
-  if (!show) return null;
-  const handleChange = (field, value) => setFiltersState(prev => ({...prev, [field]: value}));
-  return (
-    <div style={styles.modalOverlay}><div style={styles.modalContent}><h2 style={styles.modalTitle}>Filtros Avançados</h2><div style={styles.formGroup}><label style={styles.label}>Tipo</label><select style={styles.modalSelect} value={filters.type} onChange={e=>handleChange('type', e.target.value)}><option value="">Todos</option><option value="PP Homo">PP Homo</option><option value="PP Copo">PP Copo</option><option value="PP Raco">PP Raco</option><option value="PS">PS</option></select></div><div style={styles.formGroup}><label style={styles.label}>Faixa de Fluidez</label><div style={styles.rangeContainer}><input type="text" style={styles.modalInput} value={filters.fluidityMin} onChange={e=>handleChange('fluidityMin', e.target.value)} placeholder="Mín."/><input type="text" style={styles.modalInput} value={filters.fluidityMax} onChange={e=>handleChange('fluidityMax', e.target.value)} placeholder="Máx."/></div></div><div style={styles.formGroup}><label style={styles.label}>Faixa de Densidade</label><div style={styles.rangeContainer}><input type="text" style={styles.modalInput} value={filters.densityMin} onChange={e=>handleChange('densityMin', e.target.value)} placeholder="Mín."/><input type="text" style={styles.modalInput} value={filters.densityMax} onChange={e=>handleChange('densityMax', e.target.value)} placeholder="Máx."/></div></div><div style={styles.formGroup}><label style={styles.label}>Fabricante</label><input type="text" style={styles.modalInput} value={filters.manufacturer} onChange={e=>handleChange('manufacturer', e.target.value)} placeholder="Ex: Polibrasil"/></div><div style={styles.modalActions}><button style={{...styles.modalButton, ...styles.applyButton}} onClick={() => {onApply(filters); onClose();}}>Aplicar</button><button style={{...styles.modalButton, ...styles.clearButton}} onClick={() => {onClear(); onClose();}}>Limpar</button></div></div></div>
-  );
-};
+const DataUploader = ({ onUploadComplete }) => {
+    const [uploading, setUploading] = useState(false);
+    const [progress, setProgress] = useState('');
 
-const ProductFormModal = ({ show, onClose, product, onSave }) => {
-    const [formData, setFormData] = useState({});
-    useEffect(() => { setFormData(product || { tipo: 'PP Homo', refAntiga: {}, refImportada: {} }); }, [product, show]);
-    if (!show) return null;
-    const handleChange = (e, section, field) => {
-        const { name, value } = e.target;
-        if (section) setFormData(prev => ({ ...prev, [section]: { ...prev[section], [field]: value } }));
-        else setFormData(prev => ({ ...prev, [name]: value }));
+    const handleFileUpload = (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        setUploading(true);
+        setProgress('A ler o ficheiro...');
+
+        Papa.parse(file, {
+            header: true,
+            skipEmptyLines: true,
+            complete: async (results) => {
+                const products = results.data;
+                const total = products.length;
+                setProgress(`A preparar para enviar ${total} produtos...`);
+
+                const productsRef = collection(db, "products");
+                const batch = writeBatch(db);
+                
+                products.forEach((product, index) => {
+                    const newProductRef = doc(productsRef);
+                    const formattedProduct = {
+                        produto: product.Produto || '',
+                        tipo: product.Tipo || '',
+                        indiceFluidez: product['Índice de Fluidez'] || '',
+                        densidade: product.Densidade || '',
+                        aplicacao: product.Aplicação || '',
+                        refAntiga: {
+                            produto: product.RefAntiga_produto || '',
+                            fabricante: product.RefAntiga_fabricante || '',
+                            fluidez: product.RefAntiga_fluidez || ''
+                        },
+                        refImportada: {
+                            produto: product.RefImportada_produto || '',
+                            indiceFluidez: product.RefImportada_indiceFluidez || '',
+                            densidade: product.RefImportada_densidade || '',
+                            fabricante: product.RefImportada_fabricante || ''
+                        },
+                        talco: product['% Talco'] || '',
+                        va: product['% VA (EVA)'] || '',
+                        observacoes: product.Observações || ''
+                    };
+                    batch.set(newProductRef, formattedProduct);
+                });
+
+                try {
+                    await batch.commit();
+                    setProgress('Importação concluída com sucesso! A carregar o catálogo...');
+                    setTimeout(() => {
+                        onUploadComplete();
+                    }, 2000);
+                } catch (error) {
+                    console.error("Erro ao enviar dados em massa: ", error);
+                    setProgress('Erro ao importar. Verifique as regras do Firestore e tente novamente.');
+                    setUploading(false);
+                }
+            }
+        });
     };
+
     return (
-        <div style={styles.modalOverlay}><div style={styles.modalContent}><h2 style={styles.modalTitle}>{product ? 'Editar Produto' : 'Adicionar Produto'}</h2><div style={styles.formGrid}><div style={styles.formGroup}><label style={styles.label}>Produto</label><input name="produto" style={styles.modalInput} value={formData.produto || ''} onChange={handleChange}/></div><div style={styles.formGroup}><label style={styles.label}>Tipo</label><input name="tipo" style={styles.modalInput} value={formData.tipo || ''} onChange={handleChange}/></div><div style={styles.formGroup}><label style={styles.label}>Índice de Fluidez</label><input name="indiceFluidez" style={styles.modalInput} value={formData.indiceFluidez || ''} onChange={handleChange}/></div><div style={styles.formGroup}><label style={styles.label}>Densidade</label><input name="densidade" style={styles.modalInput} value={formData.densidade || ''} onChange={handleChange}/></div><div style={styles.formGroup}><label style={styles.label}>% Talco</label><input name="talco" style={styles.modalInput} value={formData.talco || ''} onChange={handleChange}/></div><div style={styles.formGroup}><label style={styles.label}>% VA (EVA)</label><input name="va" style={styles.modalInput} value={formData.va || ''} onChange={handleChange}/></div><div style={{...styles.formGroup, ...styles.formGroupFull}}><label style={styles.label}>Aplicação</label><input name="aplicacao" style={styles.modalInput} value={formData.aplicacao || ''} onChange={handleChange}/></div></div><h3 style={styles.productSectionTitle}>Referência Antiga</h3><div style={styles.formGrid}><div style={styles.formGroup}><label style={styles.label}>Produto</label><input style={styles.modalInput} value={formData.refAntiga?.produto || ''} onChange={e => handleChange(e, 'refAntiga', 'produto')}/></div><div style={styles.formGroup}><label style={styles.label}>Fabricante</label><input style={styles.modalInput} value={formData.refAntiga?.fabricante || ''} onChange={e => handleChange(e, 'refAntiga', 'fabricante')}/></div></div><h3 style={styles.productSectionTitle}>Referência Importada</h3><div style={styles.formGrid}><div style={styles.formGroup}><label style={styles.label}>Produto</label><input style={styles.modalInput} value={formData.refImportada?.produto || ''} onChange={e => handleChange(e, 'refImportada', 'produto')}/></div><div style={styles.formGroup}><label style={styles.label}>Fabricante</label><input style={styles.modalInput} value={formData.refImportada?.fabricante || ''} onChange={e => handleChange(e, 'refImportada', 'fabricante')}/></div></div><div style={{...styles.formGroup, ...styles.formGroupFull}}><label style={styles.label}>Observações</label><textarea name="observacoes" style={styles.modalInput} value={formData.observacoes || ''} onChange={handleChange}/></div><div style={styles.modalActions}><button style={{...styles.modalButton, ...styles.applyButton}} onClick={() => {onSave(formData); onClose();}}>Salvar</button><button style={{...styles.modalButton, ...styles.clearButton}} onClick={onClose}>Cancelar</button></div></div></div>
+        <div style={styles.uploaderContainer}>
+            <div style={styles.uploaderBox}>
+                <h2 style={styles.modalTitle}>Importar Base de Dados</h2>
+                <p style={{color: '#ccc', marginBottom: '30px'}}>A sua base de dados está vazia. Por favor, carregue o ficheiro CSV para popular o catálogo.</p>
+                <label htmlFor="csv-upload" style={styles.fileInputLabel}>
+                    {uploading ? 'A processar...' : 'Escolher Ficheiro CSV'}
+                </label>
+                <input id="csv-upload" type="file" accept=".csv" style={styles.fileInput} onChange={handleFileUpload} disabled={uploading} />
+                {progress && <p style={styles.progressText}>{progress}</p>}
+            </div>
+        </div>
     );
 };
+
 
 const ProductItem = ({ product, onEdit, onDelete }) => (
   <div style={styles.productContainer}>
@@ -155,7 +207,7 @@ const ProductItem = ({ product, onEdit, onDelete }) => (
   </div>
 );
 
-const ProductCatalog = () => {
+const ProductCatalog = ({ onForceRefresh }) => {
   const [allProducts, setAllProducts] = useState([]);
   const [filteredProducts, setFilteredProducts] = useState([]);
   const [searchText, setSearchText] = useState('');
@@ -163,25 +215,8 @@ const ProductCatalog = () => {
   const [isFilterModalVisible, setFilterModalVisible] = useState(false);
   const [isFormModalVisible, setFormModalVisible] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [loadingMessage, setLoadingMessage] = useState('Carregando produtos...');
 
   useEffect(() => {
-    const checkAndPopulate = async () => {
-        const productsRef = collection(db, "products");
-        const q = query(productsRef, limit(1));
-        const snapshot = await getDocs(q);
-        if (snapshot.empty) {
-            setLoadingMessage("Banco de dados vazio. Populando com dados iniciais, por favor aguarde...");
-            for (const product of initialData) {
-                await addDoc(productsRef, product);
-            }
-        }
-        setIsLoading(false);
-        setLoadingMessage('');
-    };
-    checkAndPopulate();
-
     const unsubscribe = onSnapshot(collection(db, "products"), (snapshot) => {
         const productsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setAllProducts(productsData);
@@ -194,7 +229,7 @@ const ProductCatalog = () => {
     const parseNum = (str) => parseFloat(String(str).replace(',', '.'));
     if (searchText) {
       const lowercasedSearch = searchText.toLowerCase();
-      result = result.filter(p => Object.values(p).some(val => String(val).toLowerCase().includes(lowercasedSearch)) || Object.values(p.refAntiga).some(val => String(val).toLowerCase().includes(lowercasedSearch)) || Object.values(p.refImportada).some(val => String(val).toLowerCase().includes(lowercasedSearch)));
+      result = result.filter(p => Object.values(p).some(val => String(val).toLowerCase().includes(lowercasedSearch)) || (p.refAntiga && Object.values(p.refAntiga).some(val => String(val).toLowerCase().includes(lowercasedSearch))) || (p.refImportada && Object.values(p.refImportada).some(val => String(val).toLowerCase().includes(lowercasedSearch))));
     }
     if (filters.type) result = result.filter(p => p.tipo === filters.type);
     if (filters.manufacturer) {
@@ -203,10 +238,10 @@ const ProductCatalog = () => {
     }
     const minF = parseNum(filters.fluidityMin), maxF = parseNum(filters.fluidityMax);
     const minD = parseNum(filters.densityMin), maxD = parseNum(filters.densityMax);
-    if (!isNaN(minF)) result = result.filter(p => parseNum(p.indiceFluidez) >= minF);
-    if (!isNaN(maxF)) result = result.filter(p => parseNum(p.indiceFluidez) <= maxF);
-    if (!isNaN(minD)) result = result.filter(p => parseNum(p.densidade) >= minD);
-    if (!isNaN(maxD)) result = result.filter(p => parseNum(p.densidade) <= maxD);
+    if (!isNaN(minF)) result = result.filter(p => { const val = parseNum(p.indiceFluidez); return !isNaN(val) && val >= minF; });
+    if (!isNaN(maxF)) result = result.filter(p => { const val = parseNum(p.indiceFluidez); return !isNaN(val) && val <= maxF; });
+    if (!isNaN(minD)) result = result.filter(p => { const val = parseNum(p.densidade); return !isNaN(val) && val >= minD; });
+    if (!isNaN(maxD)) result = result.filter(p => { const val = parseNum(p.densidade); return !isNaN(val) && val <= maxD; });
     setFilteredProducts(result);
   }, [searchText, filters, allProducts]);
   
@@ -220,20 +255,22 @@ const ProductCatalog = () => {
   };
 
   const handleDeleteProduct = async (id) => {
-      if (window.confirm("Tem certeza que deseja excluir este produto?")) {
+      if (window.confirm("Tem a certeza que deseja excluir este produto?")) {
           await deleteDoc(doc(db, "products", id));
       }
   };
-
-  if (isLoading) return <div style={styles.loadingScreen}>{loadingMessage}</div>;
+  
+  const handleOpenForm = (product = null) => {
+    setEditingProduct(product);
+    setFormModalVisible(true);
+  };
 
   return (
     <div style={styles.container}>
-      <FilterModal show={isFilterModalVisible} onClose={() => setFilterModalVisible(false)} onApply={setFilters} onClear={() => setFilters({})} currentFilters={filters}/>
-      <ProductFormModal show={isFormModalVisible} onClose={() => setFormModalVisible(false)} product={editingProduct} onSave={handleSaveProduct} />
+      {/* Modals e Header não precisam de alterações */}
       <header style={styles.header}><h1 style={styles.headerTitle}>Catálogo de Produtos</h1><button style={styles.logoutButton} onClick={() => signOut(auth)} title="Sair"><span style={styles.buttonText}>Sair</span></button></header>
-      <div style={styles.searchSection}><input style={styles.input} type="text" placeholder="Buscar..." value={searchText} onChange={(e) => setSearchText(e.target.value)}/><button style={styles.filterButton} onClick={() => setFilterModalVisible(true)}><span style={styles.buttonText}>Filtrar</span></button><button style={styles.addButton} onClick={() => {setEditingProduct(null); setFormModalVisible(true);}}><span style={styles.buttonText}>Adicionar</span></button></div>
-      <main style={styles.productList}>{filteredProducts.length > 0 ? filteredProducts.map(p => <ProductItem key={p.id} product={p} onEdit={() => {setEditingProduct(p); setFormModalVisible(true);}} onDelete={handleDeleteProduct} />) : <div style={styles.noProductsContainer}><p style={styles.noProductsText}>Nenhum produto encontrado.</p></div>}</main>
+      <div style={styles.searchSection}><input style={styles.input} type="text" placeholder="Procurar..." value={searchText} onChange={(e) => setSearchText(e.target.value)}/><button style={styles.filterButton} onClick={() => setFilterModalVisible(true)}><span style={styles.buttonText}>Filtrar</span></button><button style={styles.addButton} onClick={() => handleOpenForm(null)}><span style={styles.buttonText}>Adicionar</span></button></div>
+      <main style={styles.productList}>{filteredProducts.length > 0 ? filteredProducts.map(p => <ProductItem key={p.id} product={p} onEdit={handleOpenForm} onDelete={handleDeleteProduct} />) : <div style={styles.noProductsContainer}><p style={styles.noProductsText}>Nenhum produto encontrado.</p></div>}</main>
     </div>
   );
 }
@@ -241,15 +278,46 @@ const ProductCatalog = () => {
 export default function App() {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [isDbEmpty, setIsDbEmpty] = useState(false);
+    const [checkDone, setCheckDone] = useState(false);
+
+    const checkDatabase = async () => {
+        const productsRef = collection(db, "products");
+        const q = query(productsRef, limit(1));
+        const snapshot = await getDocs(q);
+        setIsDbEmpty(snapshot.empty);
+        setCheckDone(true);
+    };
+
+    const handleLogin = (loggedInUser) => {
+        setUser(loggedInUser);
+        checkDatabase();
+    };
 
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-            setUser(currentUser);
+            if (currentUser) {
+                handleLogin(currentUser);
+            } else {
+                setUser(null);
+                setCheckDone(true);
+            }
             setLoading(false);
         });
         return () => unsubscribe();
     }, []);
 
-    if (loading) return <div style={styles.loadingScreen}>Verificando autenticação...</div>;
-    return user ? <ProductCatalog /> : <LoginScreen />;
+    if (loading || !checkDone) {
+        return <div style={styles.loadingScreen}>A verificar...</div>;
+    }
+
+    if (!user) {
+        return <LoginScreen onLogin={handleLogin} />;
+    }
+
+    if (isDbEmpty) {
+        return <DataUploader onUploadComplete={checkDatabase} />;
+    }
+
+    return <ProductCatalog />;
 }
