@@ -91,17 +91,19 @@ const StyleInjector = () => {
       .file-input-label { background-color: var(--primary-color); color: white; padding: 1rem 2rem; border-radius: 8px; cursor: pointer; display: inline-block; margin-bottom: 1.5rem; font-weight: 600; }
       .progress-text { margin-top: 1.5rem; font-size: 1rem; color: var(--text-secondary); }
       
-      /* Estilos para a Tela de Login (Tema Escuro - Novo Design) */
-      .login-container-dark { display: flex; justify-content: center; align-items: center; height: 100vh; padding: 1rem; background-color: #343a40; }
-      .login-box-dark { width: 100%; max-width: 400px; padding: 3rem; background-color: #212529; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); }
-      .login-title-dark { color: #ffffff; text-align: center; margin-bottom: 2.5rem; font-size: 2.5rem; font-weight: 700; font-family: 'Lora', serif; }
-      .login-input-dark { width: 100%; height: 50px; background-color: #ffffff; border-radius: 8px; padding: 0 1rem; color: #212529; font-size: 1rem; border: 1px solid #4a5568; transition: all 0.2s; box-sizing: border-box; }
-      .login-input-dark:focus { outline: none; border-color: #007bff; box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25); }
-      .login-button-dark { width: 100%; height: 50px; background-color: #007bff; color: white; border-radius: 8px; border: none; cursor: pointer; font-weight: 600; font-size: 1rem; transition: background-color 0.2s; margin-top: 1rem; }
-      .login-button-dark:hover { background-color: #0056b3; }
-      .login-error-dark { color: #e53e3e; text-align: center; margin-bottom: 1rem; }
-      .login-toggle-dark { color: #007bff; text-align: center; cursor: pointer; margin-top: 1.5rem; font-size: 0.9rem; text-decoration: none; }
-      .login-toggle-dark:hover { text-decoration: underline; }
+      /* Estilos para a Tela de Login (Novo Design) */
+      .login-container { display: flex; justify-content: center; align-items: center; min-height: 100vh; background-color: #f0f2f5; padding: 1rem; }
+      .login-box { width: 100%; max-width: 400px; text-align: center; }
+      .login-form { background-color: #fff; border-radius: 12px; padding: 2.5rem; box-shadow: 0 8px 32px rgba(0,0,0,0.1); }
+      .login-logo { font-size: 2.5rem; font-family: 'Lora', serif; margin-bottom: 2rem; color: var(--primary-color); }
+      .login-input-wrapper { position: relative; margin-bottom: 1rem; }
+      .login-input-icon { position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: #adb5bd; width: 18px; height: 18px; }
+      .login-input { width: 100%; height: 50px; background-color: #f8f9fa; border-radius: 8px; padding: 0 1rem 0 50px; color: #495057; font-size: 1rem; border: 1px solid #ced4da; box-sizing: border-box; transition: all 0.2s; }
+      .login-input:focus { outline: none; border-color: var(--primary-color); box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25); }
+      .login-button { width: 100%; height: 50px; background-color: var(--primary-color); color: white; border-radius: 8px; border: none; cursor: pointer; font-weight: 600; font-size: 1rem; transition: background-color 0.2s; margin-top: 1rem; }
+      .login-button:disabled { background-color: #6c757d; cursor: not-allowed; }
+      .login-error { color: var(--danger-color); margin: 1rem 0; font-size: 0.9rem; }
+      .login-toggle { color: var(--primary-color); font-weight: 500; text-decoration: none; margin-top: 1.5rem; display: inline-block; }
 
       @media (min-width: 640px) {
         .search-section { flex-direction: row; }
@@ -123,141 +125,58 @@ const StyleInjector = () => {
 // --- Componentes ---
 
 const LoginScreen = ({ onLogin }) => {
-  const [isLogin, setIsLogin] = useState(true);
-  const [formData, setFormData] = useState({
-    email: '',
-    password: '',
-    confirmPassword: ''
-  });
-  const [error, setError] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+    const [isLogin, setIsLogin] = useState(true);
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [error, setError] = useState('');
+    const [loading, setLoading] = useState(false);
 
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-  };
+    const handleAuth = async (e) => {
+        e.preventDefault();
+        setError('');
+        setLoading(true);
+        try {
+            let userCredential;
+            if (isLogin) {
+                userCredential = await signInWithEmailAndPassword(auth, email, password);
+            } else {
+                userCredential = await createUserWithEmailAndPassword(auth, email, password);
+            }
+            onLogin(userCredential.user);
+        } catch (err) {
+            if (err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') setError('Utilizador ou senha inválidos.');
+            else if (err.code === 'auth/email-already-in-use') setError('Este email já está cadastrado.');
+            else setError('Ocorreu um erro. Tente novamente.');
+            setLoading(false);
+        }
+    };
 
-  const validateForm = () => {
-    if (!formData.email.includes('@')) {
-      setError('Por favor, insira um email válido');
-      return false;
-    }
-    if (formData.password.length < 6) {
-      setError('A senha deve ter pelo menos 6 caracteres');
-      return false;
-    }
-    if (!isLogin && formData.password !== formData.confirmPassword) {
-      setError('As senhas não coincidem');
-      return false;
-    }
-    return true;
-  };
-
-  const handleAuth = async (e) => {
-    e.preventDefault();
-    setError('');
-    
-    if (!validateForm()) return;
-    
-    setIsLoading(true);
-    
-    try {
-      let userCredential;
-      if (isLogin) {
-        userCredential = await signInWithEmailAndPassword(auth, formData.email, formData.password);
-      } else {
-        userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
-      }
-      onLogin(userCredential.user);
-    } catch (err) {
-      handleAuthError(err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleAuthError = (error) => {
-    switch (error.code) {
-      case 'auth/wrong-password':
-      case 'auth/user-not-found':
-      case 'auth/invalid-credential':
-        setError('Email ou senha inválidos');
-        break;
-      case 'auth/email-already-in-use':
-        setError('Este email já está cadastrado');
-        break;
-      case 'auth/weak-password':
-        setError('A senha deve ter pelo menos 6 caracteres');
-        break;
-      default:
-        setError('Ocorreu um erro. Tente novamente');
-    }
-  };
-
-  return (
-    <div className="login-container-dark">
-      <div className="login-box-dark">
-        <h1 className="login-title-dark">{isLogin ? 'Login' : 'Cadastro'}</h1>
-        
-        {error && <div className="login-error-dark">{error}</div>}
-        
-        <form onSubmit={handleAuth}>
-          <div style={{ marginBottom: '1rem' }}>
-            <input
-              type="email"
-              name="email"
-              className="login-input-dark"
-              placeholder="Email"
-              value={formData.email}
-              onChange={handleInputChange}
-              required
-            />
-          </div>
-          
-          <div style={{ marginBottom: '1rem' }}>
-            <input
-              type="password"
-              name="password"
-              className="login-input-dark"
-              placeholder="Senha"
-              value={formData.password}
-              onChange={handleInputChange}
-              required
-            />
-          </div>
-          
-          {!isLogin && (
-            <div style={{ marginBottom: '1rem' }}>
-              <input
-                type="password"
-                name="confirmPassword"
-                className="login-input-dark"
-                placeholder="Confirmar Senha"
-                value={formData.confirmPassword}
-                onChange={handleInputChange}
-                required
-              />
+    return (
+        <div className="login-container">
+            <div className="login-box">
+                <div className="login-form">
+                    <h1 className="login-logo">Catálogo</h1>
+                    <form onSubmit={handleAuth}>
+                        <div className="login-input-wrapper">
+                            <svg className="login-input-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4-8 5-8-5V6l8 5 8-5v2z"/></svg>
+                            <input type="email" placeholder="Email" className="login-input" value={email} onChange={e => setEmail(e.target.value)} required />
+                        </div>
+                        <div className="login-input-wrapper">
+                            <svg className="login-input-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1s3.1 1.39 3.1 3.1v2z"/></svg>
+                            <input type="password" placeholder="Senha" className="login-input" value={password} onChange={e => setPassword(e.target.value)} required />
+                        </div>
+                        <button type="submit" className="login-button" disabled={loading || !email || !password}>
+                            {loading ? 'Aguarde...' : (isLogin ? 'Entrar' : 'Cadastrar')}
+                        </button>
+                        {error && <p className="login-error">{error}</p>}
+                    </form>
+                </div>
+                <a href="#" className="login-toggle" onClick={(e) => { e.preventDefault(); setIsLogin(!isLogin); }}>
+                    {isLogin ? 'Não tem uma conta? Cadastre-se' : 'Já tem uma conta? Faça o login'}
+                </a>
             </div>
-          )}
-          
-          <button 
-            type="submit" 
-            className="login-button-dark"
-            disabled={isLoading}
-          >
-            {isLoading ? 'Processando...' : isLogin ? 'Entrar' : 'Cadastrar'}
-          </button>
-        </form>
-        
-        <div 
-          className="login-toggle-dark" 
-          onClick={() => setIsLogin(!isLogin)}
-        >
-          {isLogin ? 'Não tem uma conta? Cadastre-se' : 'Já tem uma conta? Faça o login'}
         </div>
-      </div>
-    </div>
-  );
+    );
 };
 
 const DataUploader = ({ onUploadComplete }) => {
@@ -518,7 +437,7 @@ const ProductCatalog = ({ onForceImport }) => {
                <div className="uploader-container">
                   <div className="uploader-box">
                       <h2 className="modal-title">Nenhum Produto Encontrado</h2>
-                      <p style={{color: '#6c757d', marginBottom: '30px'}}>A sua base de dados está vazia. Clique abaixo para importar os dados do seu ficheiro CSV.</p>
+                      <p style={{color: '#6c757d', marginBottom: '30px'}}>A sua base de dados está vazia. Clique abaixo para importar os dados do seu ficheiro.</p>
                       <button onClick={onForceImport} className="file-input-label">
                           Forçar Importação de Ficheiro
                       </button>
@@ -586,19 +505,20 @@ export default function App() {
     if (loading) {
         return <div className="loading-screen">A verificar...</div>;
     }
-
+    
+    let content;
     if (!user) {
-        return <LoginScreen onLogin={handleLogin} />;
-    }
-
-    if (showUploader) {
-        return <DataUploader onUploadComplete={checkDatabase} />;
+        content = <LoginScreen onLogin={handleLogin} />;
+    } else if (showUploader) {
+        content = <DataUploader onUploadComplete={checkDatabase} />;
+    } else {
+        content = <ProductCatalog onForceImport={forceImport} />;
     }
 
     return (
         <>
             <StyleInjector />
-            <ProductCatalog onForceImport={forceImport} />
+            {content}
         </>
     );
 }
