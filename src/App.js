@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { initializeApp } from "firebase/app";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "firebase/auth";
 import { getFirestore, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, getDocs, query, limit, writeBatch } from "firebase/firestore";
-// A biblioteca PapaParse será carregada de um CDN.
+// As bibliotecas para ler ficheiros serão carregadas de um CDN.
 
 // --- Configuração do Firebase ---
 const firebaseConfig = {
@@ -21,60 +21,103 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// --- Estilos ---
-const styles = {
-  safeArea: { backgroundColor: '#1a1a1a', fontFamily: 'sans-serif' },
-  container: { display: 'flex', flexDirection: 'column', minHeight: '100vh', backgroundColor: '#1a1a1a' },
-  header: { backgroundColor: '#252525', padding: '20px 16px', borderBottom: '1px solid #333', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-  headerTitle: { color: '#fff', fontSize: '24px', fontWeight: 'bold', margin: 0 },
-  searchSection: { display: 'flex', flexDirection: 'row', padding: '16px', alignItems: 'center', backgroundColor: '#252525' },
-  input: { flex: 1, height: '50px', backgroundColor: '#333', borderRadius: '8px', padding: '0 16px', color: '#fff', fontSize: '16px', marginRight: '10px', border: 'none' },
-  filterButton: { height: '50px', backgroundColor: '#007AFF', borderRadius: '8px', padding: '0 20px', display: 'flex', justifyContent: 'center', alignItems: 'center', border: 'none', cursor: 'pointer' },
-  addButton: { height: '50px', backgroundColor: '#4CAF50', borderRadius: '8px', padding: '0 20px', display: 'flex', justifyContent: 'center', alignItems: 'center', border: 'none', cursor: 'pointer', marginLeft: '10px' },
-  buttonText: { color: '#fff', fontWeight: 'bold', fontSize: '16px' },
-  logoutButton: { backgroundColor: '#f44336', padding: '10px 15px', borderRadius: '8px', border: 'none', cursor: 'pointer' },
-  productList: { flex: 1, padding: '16px', overflowY: 'auto' },
-  productContainer: { backgroundColor: '#2c2c2e', padding: '20px', borderRadius: '12px', marginBottom: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.3)', position: 'relative' },
-  productActions: { position: 'absolute', top: '15px', right: '15px', display: 'flex', gap: '10px' },
-  actionButton: { backgroundColor: '#555', padding: '8px', borderRadius: '50%', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' },
-  productHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px', borderBottom: '1px solid #444', paddingBottom: '10px' },
-  productName: { fontSize: '20px', fontWeight: 'bold', color: '#fff', margin: 0 },
-  productType: { fontSize: '14px', color: '#aaa', fontStyle: 'italic' },
-  productSectionTitle: { fontSize: '16px', fontWeight: 'bold', color: '#00AFFF', marginTop: '16px', marginBottom: '8px', borderBottom: '1px solid #444', paddingBottom: '4px' },
-  productApplication: { fontSize: '14px', color: '#ccc', lineHeight: '1.5' },
-  referenceContainer: { backgroundColor: '#3a3a3c', borderRadius: '8px', padding: '12px', marginTop: '10px' },
-  referenceText: { fontSize: '14px', color: '#ddd', margin: '4px 0' },
-  detailsGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '10px' },
-  detailItem: { backgroundColor: '#3a3a3c', padding: '8px', borderRadius: '6px' },
-  detailLabel: { fontSize: '12px', color: '#aaa' },
-  detailValue: { fontSize: '14px', color: '#fff', fontWeight: '500' },
-  noProductsContainer: { flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', marginTop: '50px' },
-  noProductsText: { color: '#888', fontSize: '16px' },
-  modalOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 },
-  modalContent: { backgroundColor: '#2c2c2e', padding: '30px', borderRadius: '12px', width: '90%', maxWidth: '600px', color: '#fff', maxHeight: '90vh', overflowY: 'auto' },
-  modalTitle: { fontSize: '22px', fontWeight: 'bold', marginBottom: '20px', textAlign: 'center' },
-  formGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' },
-  formGroup: { marginBottom: '15px' },
-  formGroupFull: { gridColumn: '1 / -1' },
-  label: { display: 'block', marginBottom: '8px', fontSize: '16px', color: '#ccc' },
-  modalInput: { width: '100%', padding: '12px', backgroundColor: '#333', border: '1px solid #555', borderRadius: '8px', color: '#fff', fontSize: '16px', boxSizing: 'border-box' },
-  modalSelect: { width: '100%', padding: '12px', backgroundColor: '#333', border: '1px solid #555', borderRadius: '8px', color: '#fff', fontSize: '16px' },
-  rangeContainer: { display: 'flex', alignItems: 'center', gap: '10px' },
-  modalActions: { display: 'flex', justifyContent: 'space-between', marginTop: '30px' },
-  modalButton: { flex: 1, padding: '12px 20px', borderRadius: '8px', border: 'none', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer' },
-  applyButton: { backgroundColor: '#007AFF', color: 'white', marginRight: '10px' },
-  clearButton: { backgroundColor: '#555', color: 'white' },
-  loginContainer: { display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' },
-  loginBox: { width: '350px', padding: '40px', backgroundColor: '#2c2c2e', borderRadius: '12px', boxShadow: '0 5px 15px rgba(0,0,0,0.5)' },
-  loginTitle: { color: '#fff', textAlign: 'center', marginBottom: '30px' },
-  loginError: { color: '#f44336', textAlign: 'center', marginBottom: '15px' },
-  loginToggle: { color: '#007AFF', textAlign: 'center', cursor: 'pointer', marginTop: '20px' },
-  loadingScreen: { display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', color: 'white', fontSize: '18px' },
-  uploaderContainer: { display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100vh', color: 'white', textAlign: 'center', padding: '20px' },
-  uploaderBox: { backgroundColor: '#2c2c2e', padding: '40px', borderRadius: '12px', boxShadow: '0 5px 15px rgba(0,0,0,0.5)'},
-  fileInput: { display: 'none' },
-  fileInputLabel: { backgroundColor: '#007AFF', color: 'white', padding: '15px 30px', borderRadius: '8px', cursor: 'pointer', display: 'inline-block', marginBottom: '20px' },
-  progressText: { marginTop: '20px', fontSize: '16px' }
+// --- Componente de Estilos ---
+const StyleInjector = () => {
+  useEffect(() => {
+    const styleTag = document.createElement('style');
+    styleTag.innerHTML = `
+      @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Lora:wght@400;700&display=swap');
+      
+      :root {
+        --bg-main: #f8f9fa;
+        --bg-card: #ffffff;
+        --border-color: #dee2e6;
+        --text-primary: #212529;
+        --text-secondary: #6c757d;
+        --primary-color: #007bff;
+        --primary-hover: #0056b3;
+        --danger-color: #dc3545;
+      }
+
+      body {
+        margin: 0;
+        font-family: 'Poppins', sans-serif;
+        background-color: var(--bg-main);
+        color: var(--text-primary);
+      }
+      
+      .app-container { display: flex; flex-direction: column; min-height: 100vh; }
+      .header { background-color: var(--bg-card); padding: 1rem 1.5rem; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+      .header-title { font-size: 1.5rem; font-weight: 600; margin: 0; color: var(--primary-color); }
+      .search-section { display: flex; flex-direction: column; gap: 1rem; padding: 1rem 1.5rem; background-color: #e9ecef; border-bottom: 1px solid var(--border-color); }
+      .input { flex-grow: 1; height: 50px; background-color: var(--bg-card); border-radius: 8px; padding: 0 1rem; color: var(--text-primary); font-size: 1rem; border: 1px solid var(--border-color); transition: all 0.2s; }
+      .input:focus { outline: none; border-color: var(--primary-color); box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25); }
+      .button { height: 50px; background-color: var(--primary-color); color: white; border-radius: 8px; padding: 0 1.5rem; border: none; cursor: pointer; font-weight: 500; font-size: 1rem; transition: background-color 0.2s; white-space: nowrap; }
+      .button:hover { background-color: var(--primary-hover); }
+      .button-group { display: flex; gap: 1rem; }
+      .logout-button { background-color: var(--danger-color); padding: 0.5rem 1rem; height: auto; }
+      .product-list { flex-grow: 1; padding: 1.5rem; overflow-y: auto; }
+      .product-container { background-color: var(--bg-card); padding: 1.5rem; border-radius: 12px; margin-bottom: 1.5rem; box-shadow: 0 4px 12px rgba(0,0,0,0.08); position: relative; border: 1px solid var(--border-color); transition: transform 0.2s, box-shadow 0.2s; }
+      .product-container:hover { transform: translateY(-3px); box-shadow: 0 8px 16px rgba(0,0,0,0.1); }
+      .product-actions { position: absolute; top: 1rem; right: 1rem; display: flex; gap: 0.5rem; }
+      .action-button { background-color: #f1f3f5; color: var(--text-secondary); width: 32px; height: 32px; border-radius: 50%; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
+      .action-button:hover { background-color: #e9ecef; color: var(--text-primary); }
+      .action-button.delete:hover { background-color: var(--danger-color); color: white; }
+      .product-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem; }
+      .product-name { font-size: 1.25rem; font-weight: 600; margin: 0; color: var(--text-primary); }
+      .product-type { font-size: 0.9rem; color: var(--text-secondary); }
+      .product-section-title { font-size: 1rem; font-weight: 600; color: var(--primary-color); margin-top: 1.5rem; margin-bottom: 0.5rem; }
+      .product-application { font-size: 0.9rem; color: var(--text-secondary); line-height: 1.6; }
+      .reference-container { background-color: #f8f9fa; border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; margin-top: 0.5rem; }
+      .reference-text { font-size: 0.9rem; color: var(--text-primary); margin: 0.25rem 0; }
+      .details-grid { display: grid; grid-template-columns: 1fr; gap: 0.75rem; margin-top: 0.5rem; }
+      .detail-item { background-color: #f8f9fa; padding: 0.75rem; border-radius: 6px; border: 1px solid var(--border-color); }
+      .detail-label { font-size: 0.75rem; color: var(--text-secondary); font-weight: 500; }
+      .detail-value { font-size: 0.9rem; color: var(--text-primary); font-weight: 500; }
+      .no-products-container { flex-grow: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 2rem; }
+      .no-products-text { color: var(--text-secondary); font-size: 1.1rem; }
+      .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.5); display: flex; justify-content: center; align-items: center; z-index: 1000; padding: 1rem; }
+      .modal-content { background-color: var(--bg-card); padding: 2rem; border-radius: 12px; width: 100%; max-width: 600px; color: var(--text-primary); max-height: 90vh; overflow-y: auto; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+      .modal-title { font-size: 1.5rem; font-weight: 600; margin-bottom: 1.5rem; text-align: center; }
+      .form-grid { display: grid; grid-template-columns: 1fr; gap: 1rem; }
+      .form-group { margin-bottom: 1rem; }
+      .form-group-full { grid-column: 1 / -1; }
+      .label { display: block; margin-bottom: 0.5rem; font-size: 0.9rem; color: var(--text-secondary); font-weight: 500; }
+      .range-container { display: flex; align-items: center; gap: 0.5rem; }
+      .modal-actions { display: flex; flex-direction: column; gap: 0.75rem; margin-top: 2rem; }
+      .loading-screen { display: flex; justify-content: center; align-items: center; height: 100vh; color: var(--text-secondary); font-size: 1.1rem; }
+      .uploader-container { display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; color: var(--text-primary); text-align: center; padding: 1rem; }
+      .uploader-box { background-color: var(--bg-card); padding: 2.5rem; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); width: 100%; max-width: 500px; }
+      .file-input-label { background-color: var(--primary-color); color: white; padding: 1rem 2rem; border-radius: 8px; cursor: pointer; display: inline-block; margin-bottom: 1.5rem; font-weight: 600; }
+      .progress-text { margin-top: 1.5rem; font-size: 1rem; color: var(--text-secondary); }
+      
+      /* Estilos para a Tela de Login (Tema Escuro - Novo Design) */
+      .login-container-dark { display: flex; justify-content: center; align-items: center; height: 100vh; padding: 1rem; background-color: #343a40; }
+      .login-box-dark { width: 100%; max-width: 400px; padding: 3rem; background-color: #212529; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); }
+      .login-title-dark { color: #ffffff; text-align: center; margin-bottom: 2.5rem; font-size: 2.5rem; font-weight: 700; font-family: 'Lora', serif; }
+      .login-input-dark { width: 100%; height: 50px; background-color: #ffffff; border-radius: 8px; padding: 0 1rem; color: #212529; font-size: 1rem; border: 1px solid #4a5568; transition: all 0.2s; box-sizing: border-box; }
+      .login-input-dark:focus { outline: none; border-color: #007bff; box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25); }
+      .login-button-dark { width: 100%; height: 50px; background-color: #007bff; color: white; border-radius: 8px; border: none; cursor: pointer; font-weight: 600; font-size: 1rem; transition: background-color 0.2s; margin-top: 1rem; }
+      .login-button-dark:hover { background-color: #0056b3; }
+      .login-error-dark { color: #e53e3e; text-align: center; margin-bottom: 1rem; }
+      .login-toggle-dark { color: #007bff; text-align: center; cursor: pointer; margin-top: 1.5rem; font-size: 0.9rem; text-decoration: none; }
+      .login-toggle-dark:hover { text-decoration: underline; }
+
+      @media (min-width: 640px) {
+        .search-section { flex-direction: row; }
+        .modal-actions { flex-direction: row; }
+        .details-grid { grid-template-columns: 1fr 1fr; }
+        .form-grid { grid-template-columns: 1fr 1fr; }
+      }
+    `;
+    document.head.appendChild(styleTag);
+
+    return () => {
+      document.head.removeChild(styleTag);
+    };
+  }, []);
+
+  return null;
 };
 
 // --- Componentes ---
@@ -103,7 +146,24 @@ const LoginScreen = ({ onLogin }) => {
     };
 
     return (
-        <div style={styles.loginContainer}><div style={styles.loginBox}><h2 style={styles.loginTitle}>{isLogin ? 'Login' : 'Cadastro'}</h2>{error && <p style={styles.loginError}>{error}</p>}<div style={styles.formGroup}><input type="email" placeholder="Email" style={styles.modalInput} value={email} onChange={e => setEmail(e.target.value)} /></div><div style={styles.formGroup}><input type="password" placeholder="Senha" style={styles.modalInput} value={password} onChange={e => setPassword(e.target.value)} /></div><button style={{...styles.modalButton, ...styles.applyButton, width: '100%'}} onClick={handleAuth}>{isLogin ? 'Entrar' : 'Cadastrar'}</button><p style={styles.loginToggle} onClick={() => setIsLogin(!isLogin)}>{isLogin ? 'Não tem uma conta? Cadastre-se' : 'Já tem uma conta? Faça o login'}</p></div></div>
+        <div className="login-container-dark">
+            <div className="login-box-dark">
+                <h2 className="login-title-dark">{isLogin ? 'Login' : 'Cadastro'}</h2>
+                {error && <p className="login-error-dark">{error}</p>}
+                <div className="form-group">
+                    <input type="email" placeholder="Email" className="login-input-dark" value={email} onChange={e => setEmail(e.target.value)} />
+                </div>
+                <div className="form-group">
+                    <input type="password" placeholder="Senha" className="login-input-dark" value={password} onChange={e => setPassword(e.target.value)} />
+                </div>
+                <button className="login-button-dark" onClick={handleAuth}>
+                    {isLogin ? 'Entrar' : 'Cadastrar'}
+                </button>
+                <p className="login-toggle-dark" onClick={() => setIsLogin(!isLogin)}>
+                    {isLogin ? 'Não tem uma conta? Cadastre-se' : 'Já tem uma conta? Faça o login'}
+                </p>
+            </div>
+        </div>
     );
 };
 
@@ -111,66 +171,57 @@ const DataUploader = ({ onUploadComplete }) => {
     const [uploading, setUploading] = useState(false);
     const [progress, setProgress] = useState('');
 
-    const parseAndUpload = (file) => {
-        setProgress('A ler o ficheiro...');
-        window.Papa.parse(file, {
-            header: true,
-            skipEmptyLines: true,
-            delimiter: ";",
-            complete: async (results) => {
-                const products = results.data;
-                const total = products.length;
-                setProgress(`A preparar para enviar ${total} produtos...`);
+    const processAndUpload = async (data) => {
+        const products = data;
+        const total = products.length;
+        setProgress(`A preparar para enviar ${total} produtos...`);
 
-                const productsRef = collection(db, "products");
-                // O Firestore tem um limite de 500 operações por batch.
-                // Vamos dividir em múltiplos batches se necessário.
-                const batches = [];
-                for (let i = 0; i < products.length; i += 499) {
-                    const batch = writeBatch(db);
-                    const chunk = products.slice(i, i + 499);
-                    chunk.forEach((product) => {
-                        const newProductRef = doc(productsRef);
-                        const formattedProduct = {
-                            produto: product.Produto || '',
-                            tipo: product.Tipo || '',
-                            indiceFluidez: product['Índice de Fluidez'] || '',
-                            densidade: product.Densidade || '',
-                            aplicacao: product.Aplicação || '',
-                            refAntiga: {
-                                produto: product.RefAntiga_produto || '',
-                                fabricante: product.RefAntiga_fabricante || '',
-                                fluidez: product.RefAntiga_fluidez || ''
-                            },
-                            refImportada: {
-                                produto: product.RefImportada_produto || '',
-                                indiceFluidez: product.RefImportada_indiceFluidez || '',
-                                densidade: product.RefImportada_densidade || '',
-                                fabricante: product.RefImportada_fabricante || ''
-                            },
-                            talco: product['% Talco'] || '',
-                            va: product['% VA (EVA)'] || '',
-                            observacoes: product.Observações || ''
-                        };
-                        batch.set(newProductRef, formattedProduct);
-                    });
-                    batches.push(batch);
-                }
+        const productsRef = collection(db, "products");
+        const batches = [];
+        for (let i = 0; i < products.length; i += 499) {
+            const batch = writeBatch(db);
+            const chunk = products.slice(i, i + 499);
+            chunk.forEach((productRow) => {
+                const newProductRef = doc(productsRef);
+                const productValues = Object.values(productRow);
+                const formattedProduct = {
+                    produto: productValues[0] || '',
+                    tipo: productValues[1] || '',
+                    indiceFluidez: productValues[2] || '',
+                    densidade: productValues[3] || '',
+                    aplicacao: productValues[4] || '',
+                    refAntiga: {
+                        produto: productValues[5] || '',
+                        fabricante: productValues[6] || '',
+                        fluidez: productValues[7] || ''
+                    },
+                    refImportada: {
+                        produto: productValues[8] || '',
+                        indiceFluidez: productValues[9] || '',
+                        densidade: productValues[10] || '',
+                        fabricante: productValues[11] || ''
+                    },
+                    talco: productValues[12] || '',
+                    va: productValues[13] || '',
+                    observacoes: productValues[14] || ''
+                };
+                batch.set(newProductRef, formattedProduct);
+            });
+            batches.push(batch);
+        }
 
-                try {
-                    setProgress('A enviar dados para o servidor...');
-                    await Promise.all(batches.map(b => b.commit()));
-                    setProgress('Importação concluída com sucesso! A carregar o catálogo...');
-                    setTimeout(() => {
-                        onUploadComplete();
-                    }, 2000);
-                } catch (error) {
-                    console.error("Erro ao enviar dados em massa: ", error);
-                    setProgress('Erro ao importar. Verifique as regras do Firestore e tente novamente.');
-                    setUploading(false);
-                }
-            }
-        });
+        try {
+            setProgress('A enviar dados para o servidor...');
+            await Promise.all(batches.map(b => b.commit()));
+            setProgress('Importação concluída com sucesso! A carregar o catálogo...');
+            setTimeout(() => {
+                onUploadComplete();
+            }, 2000);
+        } catch (error) {
+            console.error("Erro ao enviar dados em massa: ", error);
+            setProgress('Erro ao importar. Verifique as regras do Firestore e tente novamente.');
+            setUploading(false);
+        }
     };
 
     const handleFileUpload = (event) => {
@@ -178,31 +229,67 @@ const DataUploader = ({ onUploadComplete }) => {
         if (!file) return;
         setUploading(true);
 
-        if (window.Papa) {
-            parseAndUpload(file);
+        const fileExtension = file.name.split('.').pop().toLowerCase();
+
+        if (fileExtension === 'csv') {
+            setProgress('A carregar o leitor de CSV...');
+            loadScript('https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js', () => {
+                window.Papa.parse(file, {
+                    header: false,
+                    skipEmptyLines: true,
+                    delimiter: ";",
+                    complete: (results) => {
+                        const dataWithHeadersRemoved = results.data.slice(1);
+                        processAndUpload(dataWithHeadersRemoved);
+                    }
+                });
+            });
+        } else if (fileExtension === 'xlsx') {
+            setProgress('A carregar o leitor de Excel...');
+            loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js', () => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = window.XLSX.read(data, { type: 'array' });
+                    const sheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[sheetName];
+                    const json = window.XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                    const dataWithHeadersRemoved = json.slice(1);
+                    processAndUpload(dataWithHeadersRemoved);
+                };
+                reader.readAsArrayBuffer(file);
+            });
         } else {
-            setProgress('A carregar o leitor de ficheiros...');
-            const script = document.createElement('script');
-            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js';
-            script.onload = () => parseAndUpload(file);
-            script.onerror = () => {
-                setProgress('Erro ao carregar o leitor. Tente novamente.');
-                setUploading(false);
-            };
-            document.body.appendChild(script);
+            setProgress('Formato de ficheiro não suportado. Por favor, use .csv ou .xlsx');
+            setUploading(false);
         }
+    };
+    
+    const loadScript = (src, onLoad) => {
+        if (document.querySelector(`script[src="${src}"]`)) {
+            onLoad();
+            return;
+        }
+        const script = document.createElement('script');
+        script.src = src;
+        script.onload = onLoad;
+        script.onerror = () => {
+            setProgress('Erro ao carregar o leitor. Tente novamente.');
+            setUploading(false);
+        };
+        document.body.appendChild(script);
     };
 
     return (
-        <div style={styles.uploaderContainer}>
-            <div style={styles.uploaderBox}>
-                <h2 style={styles.modalTitle}>Importar Base de Dados</h2>
-                <p style={{color: '#ccc', marginBottom: '30px'}}>A sua base de dados está vazia. Por favor, carregue o ficheiro CSV para popular o catálogo.</p>
-                <label htmlFor="csv-upload" style={styles.fileInputLabel}>
-                    {uploading ? 'A processar...' : 'Escolher Ficheiro CSV'}
+        <div className="uploader-container">
+            <div className="uploader-box">
+                <h2 className="modal-title">Importar Base de Dados</h2>
+                <p style={{color: '#6c757d', marginBottom: '30px'}}>A sua base de dados está vazia. Carregue o seu ficheiro .xlsx ou .csv.</p>
+                <label htmlFor="file-upload" className="file-input-label">
+                    {uploading ? 'A processar...' : 'Escolher Ficheiro'}
                 </label>
-                <input id="csv-upload" type="file" accept=".csv" style={styles.fileInput} onChange={handleFileUpload} disabled={uploading} />
-                {progress && <p style={styles.progressText}>{progress}</p>}
+                <input id="file-upload" type="file" accept=".csv, .xlsx, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel" className="file-input" onChange={handleFileUpload} disabled={uploading} />
+                {progress && <p className="progress-text">{progress}</p>}
             </div>
         </div>
     );
@@ -214,16 +301,16 @@ const FilterModal = ({ show, onClose, onApply, onClear, currentFilters, productT
   if (!show) return null;
   const handleChange = (field, value) => setFiltersState(prev => ({...prev, [field]: value}));
   return (
-    <div style={styles.modalOverlay}><div style={styles.modalContent}><h2 style={styles.modalTitle}>Filtros Avançados</h2><div style={styles.formGroup}><label style={styles.label}>Tipo</label>
-        <select style={styles.modalSelect} value={filters.type || ''} onChange={e=>handleChange('type', e.target.value)}>
+    <div className="modal-overlay"><div className="modal-content"><h2 className="modal-title">Filtros Avançados</h2><div className="form-group"><label className="label">Tipo</label>
+        <select className="input" value={filters.type || ''} onChange={e=>handleChange('type', e.target.value)}>
             <option value="">Todos</option>
             {productTypes.map(type => <option key={type} value={type}>{type}</option>)}
         </select>
-    </div><div style={styles.formGroup}><label style={styles.label}>Faixa de Fluidez</label><div style={styles.rangeContainer}><input type="text" style={styles.modalInput} value={filters.fluidityMin || ''} onChange={e=>handleChange('fluidityMin', e.target.value)} placeholder="Mín."/><input type="text" style={styles.modalInput} value={filters.fluidityMax || ''} onChange={e=>handleChange('fluidityMax', e.target.value)} placeholder="Máx."/></div></div><div style={styles.formGroup}><label style={styles.label}>Faixa de Densidade</label><div style={styles.rangeContainer}><input type="text" style={styles.modalInput} value={filters.densityMin || ''} onChange={e=>handleChange('densityMin', e.target.value)} placeholder="Mín."/><input type="text" style={styles.modalInput} value={filters.densityMax || ''} onChange={e=>handleChange('densityMax', e.target.value)} placeholder="Máx."/></div></div><div style={styles.formGroup}><label style={styles.label}>Fabricante</label><input type="text" style={styles.modalInput} value={filters.manufacturer || ''} onChange={e=>handleChange('manufacturer', e.target.value)} placeholder="Ex: Polibrasil"/></div><div style={styles.modalActions}><button style={{...styles.modalButton, ...styles.applyButton}} onClick={() => {onApply(filters); onClose();}}>Aplicar</button><button style={{...styles.modalButton, ...styles.clearButton}} onClick={() => {onClear(); onClose();}}>Limpar</button></div></div></div>
+    </div><div className="form-group"><label className="label">Faixa de Fluidez</label><div className="range-container"><input type="text" className="input" value={filters.fluidityMin || ''} onChange={e=>handleChange('fluidityMin', e.target.value)} placeholder="Mín."/><input type="text" className="input" value={filters.fluidityMax || ''} onChange={e=>handleChange('fluidityMax', e.target.value)} placeholder="Máx."/></div></div><div className="form-group"><label className="label">Faixa de Densidade</label><div className="range-container"><input type="text" className="input" value={filters.densityMin || ''} onChange={e=>handleChange('densityMin', e.target.value)} placeholder="Mín."/><input type="text" className="input" value={filters.densityMax || ''} onChange={e=>handleChange('densityMax', e.target.value)} placeholder="Máx."/></div></div><div className="form-group"><label className="label">Fabricante</label><input type="text" className="input" value={filters.manufacturer || ''} onChange={e=>handleChange('manufacturer', e.target.value)} placeholder="Ex: Polibrasil"/></div><div className="modal-actions"><button className="button" onClick={() => {onApply(filters); onClose();}}>Aplicar</button><button className="button" style={{backgroundColor: '#6c757d'}} onClick={() => {onClear(); onClose();}}>Limpar</button></div></div></div>
   );
 };
 
-const ProductFormModal = ({ show, onClose, product, onSave, productTypes }) => {
+const ProductFormModal = ({ show, onClose, product, onSave }) => {
     const [formData, setFormData] = useState({});
     useEffect(() => { setFormData(product || { tipo: '', refAntiga: {}, refImportada: {} }); }, [product, show]);
     if (!show) return null;
@@ -233,28 +320,35 @@ const ProductFormModal = ({ show, onClose, product, onSave, productTypes }) => {
         else setFormData(prev => ({ ...prev, [name]: value }));
     };
     return (
-        <div style={styles.modalOverlay}><div style={styles.modalContent}><h2 style={styles.modalTitle}>{product ? 'Editar Produto' : 'Adicionar Produto'}</h2><div style={styles.formGrid}><div style={styles.formGroup}><label style={styles.label}>Produto</label><input name="produto" style={styles.modalInput} value={formData.produto || ''} onChange={handleChange}/></div><div style={styles.formGroup}><label style={styles.label}>Tipo</label><input name="tipo" style={styles.modalInput} value={formData.tipo || ''} onChange={handleChange}/></div><div style={styles.formGroup}><label style={styles.label}>Índice de Fluidez</label><input name="indiceFluidez" style={styles.modalInput} value={formData.indiceFluidez || ''} onChange={handleChange}/></div><div style={styles.formGroup}><label style={styles.label}>Densidade</label><input name="densidade" style={styles.modalInput} value={formData.densidade || ''} onChange={handleChange}/></div><div style={styles.formGroup}><label style={styles.label}>% Talco</label><input name="talco" style={styles.modalInput} value={formData.talco || ''} onChange={handleChange}/></div><div style={styles.formGroup}><label style={styles.label}>% VA (EVA)</label><input name="va" style={styles.modalInput} value={formData.va || ''} onChange={handleChange}/></div><div style={{...styles.formGroup, ...styles.formGroupFull}}><label style={styles.label}>Aplicação</label><input name="aplicacao" style={styles.modalInput} value={formData.aplicacao || ''} onChange={handleChange}/></div></div><h3 style={styles.productSectionTitle}>Referência Antiga</h3><div style={styles.formGrid}><div style={styles.formGroup}><label style={styles.label}>Produto</label><input style={styles.modalInput} value={formData.refAntiga?.produto || ''} onChange={e => handleChange(e, 'refAntiga', 'produto')}/></div><div style={styles.formGroup}><label style={styles.label}>Fabricante</label><input style={styles.modalInput} value={formData.refAntiga?.fabricante || ''} onChange={e => handleChange(e, 'refAntiga', 'fabricante')}/></div></div><h3 style={styles.productSectionTitle}>Referência Importada</h3><div style={styles.formGrid}><div style={styles.formGroup}><label style={styles.label}>Produto</label><input style={styles.modalInput} value={formData.refImportada?.produto || ''} onChange={e => handleChange(e, 'refImportada', 'produto')}/></div><div style={styles.formGroup}><label style={styles.label}>Fabricante</label><input style={styles.modalInput} value={formData.refImportada?.fabricante || ''} onChange={e => handleChange(e, 'refImportada', 'fabricante')}/></div></div><div style={{...styles.formGroup, ...styles.formGroupFull}}><label style={styles.label}>Observações</label><textarea name="observacoes" style={styles.modalInput} value={formData.observacoes || ''} onChange={handleChange}/></div><div style={styles.modalActions}><button style={{...styles.modalButton, ...styles.applyButton}} onClick={() => {onSave(formData); onClose();}}>Salvar</button><button style={{...styles.modalButton, ...styles.clearButton}} onClick={onClose}>Cancelar</button></div></div></div>
+        <div className="modal-overlay"><div className="modal-content"><h2 className="modal-title">{product ? 'Editar Produto' : 'Adicionar Produto'}</h2><div className="form-grid"><div className="form-group"><label className="label">Produto</label><input name="produto" className="input" value={formData.produto || ''} onChange={handleChange}/></div><div className="form-group"><label className="label">Tipo</label><input name="tipo" className="input" value={formData.tipo || ''} onChange={handleChange}/></div><div className="form-group"><label className="label">Índice de Fluidez</label><input name="indiceFluidez" className="input" value={formData.indiceFluidez || ''} onChange={handleChange}/></div><div className="form-group"><label className="label">Densidade</label><input name="densidade" className="input" value={formData.densidade || ''} onChange={handleChange}/></div><div className="form-group"><label className="label">% Talco</label><input name="talco" className="input" value={formData.talco || ''} onChange={handleChange}/></div><div className="form-group"><label className="label">% VA (EVA)</label><input name="va" className="input" value={formData.va || ''} onChange={handleChange}/></div><div className="form-group-full"><label className="label">Aplicação</label><input name="aplicacao" className="input" value={formData.aplicacao || ''} onChange={handleChange}/></div></div><h3 className="product-section-title">Referência Antiga</h3><div className="form-grid"><div className="form-group"><label className="label">Produto</label><input className="input" value={formData.refAntiga?.produto || ''} onChange={e => handleChange(e, 'refAntiga', 'produto')}/></div><div className="form-group"><label className="label">Fabricante</label><input className="input" value={formData.refAntiga?.fabricante || ''} onChange={e => handleChange(e, 'refAntiga', 'fabricante')}/></div></div><h3 className="product-section-title">Referência Importada</h3><div className="form-grid"><div className="form-group"><label className="label">Produto</label><input className="input" value={formData.refImportada?.produto || ''} onChange={e => handleChange(e, 'refImportada', 'produto')}/></div><div className="form-group"><label className="label">Fabricante</label><input className="input" value={formData.refImportada?.fabricante || ''} onChange={e => handleChange(e, 'refImportada', 'fabricante')}/></div></div><div className="form-group-full"><label className="label">Observações</label><textarea name="observacoes" className="input" style={{height: '80px', paddingTop: '0.75rem'}} value={formData.observacoes || ''} onChange={handleChange}/></div><div className="modal-actions"><button className="button" onClick={() => {onSave(formData); onClose();}}>Salvar</button><button className="button" style={{backgroundColor: '#6c757d'}} onClick={onClose}>Cancelar</button></div></div></div>
     );
 };
 
 
 const ProductItem = ({ product, onEdit, onDelete }) => (
-  <div style={styles.productContainer}>
-    <div style={styles.productActions}><button style={styles.actionButton} onClick={() => onEdit(product)} title="Editar">✏️</button><button style={{...styles.actionButton, backgroundColor: '#f44336'}} onClick={() => onDelete(product.id)} title="Excluir">🗑️</button></div>
-    <div style={styles.productHeader}><div><p style={styles.productName}>{product.produto}</p><p style={styles.productType}>{product.tipo}</p></div></div>
-    <p style={styles.productSectionTitle}>Propriedades</p>
-    <div style={styles.detailsGrid}>
-        <div style={styles.detailItem}><span style={styles.detailLabel}>Índice de Fluidez</span><p style={styles.detailValue}>{product.indiceFluidez || 'N/A'}</p></div>
-        <div style={styles.detailItem}><span style={styles.detailLabel}>Densidade</span><p style={styles.detailValue}>{product.densidade || 'N/A'}</p></div>
+  <div className="product-container">
+    <div className="product-actions">
+      <button className="action-button" onClick={() => onEdit(product)} title="Editar">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168l10-10zM11.207 2.5 13.5 4.793 14.793 3.5 12.5 1.207 11.207 2.5zm1.586 3L10.5 3.207 4 9.707V12h2.293l6.5-6.5z"/></svg>
+      </button>
+      <button className="action-button delete" onClick={() => onDelete(product.id)} title="Excluir">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path fillRule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
+      </button>
     </div>
-    {(product.talco || product.va) && <><p style={styles.productSectionTitle}>Composição</p><div style={styles.detailsGrid}>
-        {product.talco && <div style={styles.detailItem}><span style={styles.detailLabel}>% Talco</span><p style={styles.detailValue}>{product.talco}</p></div>}
-        {product.va && <div style={styles.detailItem}><span style={styles.detailLabel}>% VA (EVA)</span><p style={styles.detailValue}>{product.va}</p></div>}
+    <div className="product-header"><div><p className="product-name">{product.produto}</p><p className="product-type">{product.tipo}</p></div></div>
+    <p className="product-section-title">Propriedades</p>
+    <div className="details-grid">
+        <div className="detail-item"><span className="detail-label">Índice de Fluidez</span><p className="detail-value">{product.indiceFluidez || 'N/A'}</p></div>
+        <div className="detail-item"><span className="detail-label">Densidade</span><p className="detail-value">{product.densidade || 'N/A'}</p></div>
+    </div>
+    {(product.talco || product.va) && <><p className="product-section-title">Composição</p><div className="details-grid">
+        {product.talco && <div className="detail-item"><span className="detail-label">% Talco</span><p className="detail-value">{product.talco}</p></div>}
+        {product.va && <div className="detail-item"><span className="detail-label">% VA (EVA)</span><p className="detail-value">{product.va}</p></div>}
     </div></>}
-    <p style={styles.productSectionTitle}>Aplicação</p><p style={styles.productApplication}>{product.aplicacao}</p>
-    {product.refAntiga?.produto && <><p style={styles.productSectionTitle}>Referência Antiga</p><div style={styles.referenceContainer}><p style={styles.referenceText}>Produto: {product.refAntiga.produto}</p><p style={styles.referenceText}>Fabricante: {product.refAntiga.fabricante}</p></div></>}
-    {product.refImportada?.produto && <><p style={styles.productSectionTitle}>Referência Importada</p><div style={styles.referenceContainer}><p style={styles.referenceText}>Produto: {product.refImportada.produto}</p><p style={styles.referenceText}>Fabricante: {product.refImportada.fabricante}</p></div></>}
-    {product.observacoes && <><p style={styles.productSectionTitle}>Observações</p><p style={styles.productApplication}>{product.observacoes}</p></>}
+    {product.aplicacao && <><p className="product-section-title">Aplicação</p><p className="product-application">{product.aplicacao}</p></>}
+    {product.refAntiga?.produto && <><p className="product-section-title">Referência Antiga</p><div className="reference-container"><p className="reference-text">Produto: {product.refAntiga.produto}</p><p className="reference-text">Fabricante: {product.refAntiga.fabricante}</p></div></>}
+    {product.refImportada?.produto && <><p className="product-section-title">Referência Importada</p><div className="reference-container"><p className="reference-text">Produto: {product.refImportada.produto}</p><p className="reference-text">Fabricante: {product.refImportada.fabricante}</p></div></>}
+    {product.observacoes && <><p className="product-section-title">Observações</p><p className="product-application">{product.observacoes}</p></>}
   </div>
 );
 
@@ -326,14 +420,14 @@ const ProductCatalog = ({ onForceImport }) => {
 
   if (isDataLoaded && allProducts.length === 0) {
       return (
-          <div style={styles.container}>
-               <header style={styles.header}><h1 style={styles.headerTitle}>Catálogo de Produtos</h1><button style={styles.logoutButton} onClick={() => signOut(auth)} title="Sair"><span style={styles.buttonText}>Sair</span></button></header>
-               <div style={styles.uploaderContainer}>
-                  <div style={styles.uploaderBox}>
-                      <h2 style={styles.modalTitle}>Nenhum Produto Encontrado</h2>
-                      <p style={{color: '#ccc', marginBottom: '30px'}}>A sua base de dados está vazia. Clique abaixo para importar os dados do seu ficheiro CSV.</p>
-                      <button onClick={onForceImport} style={styles.fileInputLabel}>
-                          Forçar Importação de Ficheiro CSV
+          <div className="app-container">
+               <header className="header"><h1 className="header-title">Catálogo de Produtos</h1><button className="button logout-button" onClick={() => signOut(auth)} title="Sair">Sair</button></header>
+               <div className="uploader-container">
+                  <div className="uploader-box">
+                      <h2 className="modal-title">Nenhum Produto Encontrado</h2>
+                      <p style={{color: '#6c757d', marginBottom: '30px'}}>A sua base de dados está vazia. Clique abaixo para importar os dados do seu ficheiro CSV.</p>
+                      <button onClick={onForceImport} className="file-input-label">
+                          Forçar Importação de Ficheiro
                       </button>
                   </div>
               </div>
@@ -342,12 +436,18 @@ const ProductCatalog = ({ onForceImport }) => {
   }
 
   return (
-    <div style={styles.container}>
+    <div className="app-container">
       <FilterModal show={isFilterModalVisible} onClose={() => setFilterModalVisible(false)} onApply={setFilters} onClear={() => setFilters({ type: '', fluidityMin: '', fluidityMax: '', densityMin: '', densityMax: '', manufacturer: '' })} currentFilters={filters} productTypes={productTypes} />
-      <ProductFormModal show={isFormModalVisible} onClose={() => setFormModalVisible(false)} product={editingProduct} onSave={handleSaveProduct} productTypes={productTypes} />
-      <header style={styles.header}><h1 style={styles.headerTitle}>Catálogo de Produtos</h1><button style={styles.logoutButton} onClick={() => signOut(auth)} title="Sair"><span style={styles.buttonText}>Sair</span></button></header>
-      <div style={styles.searchSection}><input style={styles.input} type="text" placeholder="Procurar..." value={searchText} onChange={(e) => setSearchText(e.target.value)}/><button style={styles.filterButton} onClick={() => setFilterModalVisible(true)}><span style={styles.buttonText}>Filtrar</span></button><button style={styles.addButton} onClick={() => handleOpenForm(null)}><span style={styles.buttonText}>Adicionar</span></button></div>
-      <main style={styles.productList}>{filteredProducts.length > 0 ? filteredProducts.map(p => <ProductItem key={p.id} product={p} onEdit={handleOpenForm} onDelete={handleDeleteProduct} />) : <div style={styles.noProductsContainer}><p style={styles.noProductsText}>A carregar produtos...</p></div>}</main>
+      <ProductFormModal show={isFormModalVisible} onClose={() => setFormModalVisible(false)} product={editingProduct} onSave={handleSaveProduct} />
+      <header className="header"><h1 className="header-title">Catálogo de Produtos</h1><button className="button logout-button" onClick={() => signOut(auth)} title="Sair">Sair</button></header>
+      <div className="search-section">
+        <input className="input" type="text" placeholder="Procurar..." value={searchText} onChange={(e) => setSearchText(e.target.value)}/>
+        <div className="button-group">
+          <button className="button" onClick={() => setFilterModalVisible(true)}>Filtrar</button>
+          <button className="button" style={{backgroundColor: '#28a745'}} onClick={() => handleOpenForm(null)}>Adicionar</button>
+        </div>
+      </div>
+      <main className="product-list">{filteredProducts.length > 0 ? filteredProducts.map(p => <ProductItem key={p.id} product={p} onEdit={handleOpenForm} onDelete={handleDeleteProduct} />) : <div className="no-products-container"><p className="no-products-text">A carregar produtos...</p></div>}</main>
     </div>
   );
 }
@@ -391,7 +491,7 @@ export default function App() {
     };
 
     if (loading) {
-        return <div style={styles.loadingScreen}>A verificar...</div>;
+        return <div className="loading-screen">A verificar...</div>;
     }
 
     if (!user) {
@@ -402,5 +502,10 @@ export default function App() {
         return <DataUploader onUploadComplete={checkDatabase} />;
     }
 
-    return <ProductCatalog onForceImport={forceImport} />;
+    return (
+        <>
+            <StyleInjector />
+            <ProductCatalog onForceImport={forceImport} />
+        </>
+    );
 }
