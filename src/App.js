@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 // Importações do Firebase
 import { initializeApp } from "firebase/app";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "firebase/auth";
@@ -302,7 +302,8 @@ const ProductCatalog = ({ onForceImport }) => {
 
   return (
     <div style={styles.container}>
-      {/* Modals e Header não precisam de alterações */}
+      <FilterModal show={isFilterModalVisible} onClose={() => setFilterModalVisible(false)} onApply={setFilters} onClear={() => setFilters({})} currentFilters={filters}/>
+      <ProductFormModal show={isFormModalVisible} onClose={() => setFormModalVisible(false)} product={editingProduct} onSave={handleSaveProduct} />
       <header style={styles.header}><h1 style={styles.headerTitle}>Catálogo de Produtos</h1><button style={styles.logoutButton} onClick={() => signOut(auth)} title="Sair"><span style={styles.buttonText}>Sair</span></button></header>
       <div style={styles.searchSection}><input style={styles.input} type="text" placeholder="Procurar..." value={searchText} onChange={(e) => setSearchText(e.target.value)}/><button style={styles.filterButton} onClick={() => setFilterModalVisible(true)}><span style={styles.buttonText}>Filtrar</span></button><button style={styles.addButton} onClick={() => handleOpenForm(null)}><span style={styles.buttonText}>Adicionar</span></button></div>
       <main style={styles.productList}>{filteredProducts.length > 0 ? filteredProducts.map(p => <ProductItem key={p.id} product={p} onEdit={handleOpenForm} onDelete={handleDeleteProduct} />) : <div style={styles.noProductsContainer}><p style={styles.noProductsText}>A carregar produtos...</p></div>}</main>
@@ -315,7 +316,7 @@ export default function App() {
     const [loading, setLoading] = useState(true);
     const [showUploader, setShowUploader] = useState(false);
 
-    const checkDatabase = async () => {
+    const checkDatabase = useCallback(async () => {
         const productsRef = collection(db, "products");
         const q = query(productsRef, limit(1));
         const snapshot = await getDocs(q);
@@ -325,12 +326,12 @@ export default function App() {
             setShowUploader(false);
         }
         setLoading(false);
-    };
+    }, []);
 
-    const handleLogin = (loggedInUser) => {
+    const handleLogin = useCallback((loggedInUser) => {
         setUser(loggedInUser);
         checkDatabase();
-    };
+    }, [checkDatabase]);
 
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -342,7 +343,7 @@ export default function App() {
             }
         });
         return () => unsubscribe();
-    }, []);
+    }, [handleLogin]);
     
     const forceImport = () => {
         setShowUploader(true);
