@@ -123,48 +123,141 @@ const StyleInjector = () => {
 // --- Componentes ---
 
 const LoginScreen = ({ onLogin }) => {
-    const [isLogin, setIsLogin] = useState(true);
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
-    const [error, setError] = useState('');
+  const [isLogin, setIsLogin] = useState(true);
+  const [formData, setFormData] = useState({
+    email: '',
+    password: '',
+    confirmPassword: ''
+  });
+  const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
-    const handleAuth = async () => {
-        setError('');
-        try {
-            let userCredential;
-            if (isLogin) {
-                userCredential = await signInWithEmailAndPassword(auth, email, password);
-            } else {
-                userCredential = await createUserWithEmailAndPassword(auth, email, password);
-            }
-            onLogin(userCredential.user);
-        } catch (err) {
-            if (err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') setError('Email ou senha inválidos.');
-            else if (err.code === 'auth/email-already-in-use') setError('Este email já está cadastrado.');
-            else setError('Ocorreu um erro. Tente novamente.');
-        }
-    };
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
 
-    return (
-        <div className="login-container-dark">
-            <div className="login-box-dark">
-                <h2 className="login-title-dark">{isLogin ? 'Login' : 'Cadastro'}</h2>
-                {error && <p className="login-error-dark">{error}</p>}
-                <div className="form-group">
-                    <input type="email" placeholder="Email" className="login-input-dark" value={email} onChange={e => setEmail(e.target.value)} />
-                </div>
-                <div className="form-group">
-                    <input type="password" placeholder="Senha" className="login-input-dark" value={password} onChange={e => setPassword(e.target.value)} />
-                </div>
-                <button className="login-button-dark" onClick={handleAuth}>
-                    {isLogin ? 'Entrar' : 'Cadastrar'}
-                </button>
-                <p className="login-toggle-dark" onClick={() => setIsLogin(!isLogin)}>
-                    {isLogin ? 'Não tem uma conta? Cadastre-se' : 'Já tem uma conta? Faça o login'}
-                </p>
+  const validateForm = () => {
+    if (!formData.email.includes('@')) {
+      setError('Por favor, insira um email válido');
+      return false;
+    }
+    if (formData.password.length < 6) {
+      setError('A senha deve ter pelo menos 6 caracteres');
+      return false;
+    }
+    if (!isLogin && formData.password !== formData.confirmPassword) {
+      setError('As senhas não coincidem');
+      return false;
+    }
+    return true;
+  };
+
+  const handleAuth = async (e) => {
+    e.preventDefault();
+    setError('');
+    
+    if (!validateForm()) return;
+    
+    setIsLoading(true);
+    
+    try {
+      let userCredential;
+      if (isLogin) {
+        userCredential = await signInWithEmailAndPassword(auth, formData.email, formData.password);
+      } else {
+        userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
+      }
+      onLogin(userCredential.user);
+    } catch (err) {
+      handleAuthError(err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleAuthError = (error) => {
+    switch (error.code) {
+      case 'auth/wrong-password':
+      case 'auth/user-not-found':
+      case 'auth/invalid-credential':
+        setError('Email ou senha inválidos');
+        break;
+      case 'auth/email-already-in-use':
+        setError('Este email já está cadastrado');
+        break;
+      case 'auth/weak-password':
+        setError('A senha deve ter pelo menos 6 caracteres');
+        break;
+      default:
+        setError('Ocorreu um erro. Tente novamente');
+    }
+  };
+
+  return (
+    <div className="login-container-dark">
+      <div className="login-box-dark">
+        <h1 className="login-title-dark">{isLogin ? 'Login' : 'Cadastro'}</h1>
+        
+        {error && <div className="login-error-dark">{error}</div>}
+        
+        <form onSubmit={handleAuth}>
+          <div style={{ marginBottom: '1rem' }}>
+            <input
+              type="email"
+              name="email"
+              className="login-input-dark"
+              placeholder="Email"
+              value={formData.email}
+              onChange={handleInputChange}
+              required
+            />
+          </div>
+          
+          <div style={{ marginBottom: '1rem' }}>
+            <input
+              type="password"
+              name="password"
+              className="login-input-dark"
+              placeholder="Senha"
+              value={formData.password}
+              onChange={handleInputChange}
+              required
+            />
+          </div>
+          
+          {!isLogin && (
+            <div style={{ marginBottom: '1rem' }}>
+              <input
+                type="password"
+                name="confirmPassword"
+                className="login-input-dark"
+                placeholder="Confirmar Senha"
+                value={formData.confirmPassword}
+                onChange={handleInputChange}
+                required
+              />
             </div>
+          )}
+          
+          <button 
+            type="submit" 
+            className="login-button-dark"
+            disabled={isLoading}
+          >
+            {isLoading ? 'Processando...' : isLogin ? 'Entrar' : 'Cadastrar'}
+          </button>
+        </form>
+        
+        <div 
+          className="login-toggle-dark" 
+          onClick={() => setIsLogin(!isLogin)}
+        >
+          {isLogin ? 'Não tem uma conta? Cadastre-se' : 'Já tem uma conta? Faça o login'}
         </div>
-    );
+      </div>
+    </div>
+  );
 };
 
 const DataUploader = ({ onUploadComplete }) => {
