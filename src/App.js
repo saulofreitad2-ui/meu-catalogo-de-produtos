@@ -3,8 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { initializeApp } from "firebase/app";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "firebase/auth";
 import { getFirestore, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, getDocs, query, limit, writeBatch } from "firebase/firestore";
-// Importação da biblioteca para ler ficheiros CSV
-import Papa from 'papaparse';
+// A biblioteca PapaParse será carregada de um CDN.
 
 // --- Configuração do Firebase ---
 const firebaseConfig = {
@@ -112,17 +111,12 @@ const DataUploader = ({ onUploadComplete }) => {
     const [uploading, setUploading] = useState(false);
     const [progress, setProgress] = useState('');
 
-    const handleFileUpload = (event) => {
-        const file = event.target.files[0];
-        if (!file) return;
-
-        setUploading(true);
+    const parseAndUpload = (file) => {
         setProgress('A ler o ficheiro...');
-
-        Papa.parse(file, {
+        window.Papa.parse(file, {
             header: true,
             skipEmptyLines: true,
-            delimiter: ";", // Adicionado para garantir a leitura correta do seu ficheiro
+            delimiter: ";",
             complete: async (results) => {
                 const products = results.data;
                 const total = products.length;
@@ -133,7 +127,6 @@ const DataUploader = ({ onUploadComplete }) => {
                 
                 products.forEach((product) => {
                     const newProductRef = doc(productsRef);
-                    // Mapeamento dos nomes das colunas do seu ficheiro CSV
                     const formattedProduct = {
                         produto: product.Produto || '',
                         tipo: product.Tipo || '',
@@ -173,6 +166,26 @@ const DataUploader = ({ onUploadComplete }) => {
         });
     };
 
+    const handleFileUpload = (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+        setUploading(true);
+
+        if (window.Papa) {
+            parseAndUpload(file);
+        } else {
+            setProgress('A carregar o leitor de ficheiros...');
+            const script = document.createElement('script');
+            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js';
+            script.onload = () => parseAndUpload(file);
+            script.onerror = () => {
+                setProgress('Erro ao carregar o leitor. Tente novamente.');
+                setUploading(false);
+            };
+            document.body.appendChild(script);
+        }
+    };
+
     return (
         <div style={styles.uploaderContainer}>
             <div style={styles.uploaderBox}>
@@ -209,7 +222,7 @@ const ProductItem = ({ product, onEdit, onDelete }) => (
   </div>
 );
 
-const ProductCatalog = ({ onForceRefresh }) => {
+const ProductCatalog = ({ onForceImport }) => {
   const [allProducts, setAllProducts] = useState([]);
   const [filteredProducts, setFilteredProducts] = useState([]);
   const [searchText, setSearchText] = useState('');
@@ -217,11 +230,13 @@ const ProductCatalog = ({ onForceRefresh }) => {
   const [isFilterModalVisible, setFilterModalVisible] = useState(false);
   const [isFormModalVisible, setFormModalVisible] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, "products"), (snapshot) => {
         const productsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setAllProducts(productsData);
+        setIsDataLoaded(true); // Marca que os dados foram carregados (ou que a lista está vazia)
     });
     return () => unsubscribe();
   }, []);
@@ -267,12 +282,30 @@ const ProductCatalog = ({ onForceRefresh }) => {
     setFormModalVisible(true);
   };
 
+  // Se os dados já foram verificados e a lista está vazia, mostra a opção de forçar importação
+  if (isDataLoaded && allProducts.length === 0) {
+      return (
+          <div style={styles.container}>
+               <header style={styles.header}><h1 style={styles.headerTitle}>Catálogo de Produtos</h1><button style={styles.logoutButton} onClick={() => signOut(auth)} title="Sair"><span style={styles.buttonText}>Sair</span></button></header>
+               <div style={styles.uploaderContainer}>
+                  <div style={styles.uploaderBox}>
+                      <h2 style={styles.modalTitle}>Nenhum Produto Encontrado</h2>
+                      <p style={{color: '#ccc', marginBottom: '30px'}}>A sua base de dados está vazia. Clique abaixo para importar os dados do seu ficheiro CSV.</p>
+                      <button onClick={onForceImport} style={styles.fileInputLabel}>
+                          Forçar Importação de Ficheiro CSV
+                      </button>
+                  </div>
+              </div>
+          </div>
+      );
+  }
+
   return (
     <div style={styles.container}>
       {/* Modals e Header não precisam de alterações */}
       <header style={styles.header}><h1 style={styles.headerTitle}>Catálogo de Produtos</h1><button style={styles.logoutButton} onClick={() => signOut(auth)} title="Sair"><span style={styles.buttonText}>Sair</span></button></header>
       <div style={styles.searchSection}><input style={styles.input} type="text" placeholder="Procurar..." value={searchText} onChange={(e) => setSearchText(e.target.value)}/><button style={styles.filterButton} onClick={() => setFilterModalVisible(true)}><span style={styles.buttonText}>Filtrar</span></button><button style={styles.addButton} onClick={() => handleOpenForm(null)}><span style={styles.buttonText}>Adicionar</span></button></div>
-      <main style={styles.productList}>{filteredProducts.length > 0 ? filteredProducts.map(p => <ProductItem key={p.id} product={p} onEdit={handleOpenForm} onDelete={handleDeleteProduct} />) : <div style={styles.noProductsContainer}><p style={styles.noProductsText}>Nenhum produto encontrado.</p></div>}</main>
+      <main style={styles.productList}>{filteredProducts.length > 0 ? filteredProducts.map(p => <ProductItem key={p.id} product={p} onEdit={handleOpenForm} onDelete={handleDeleteProduct} />) : <div style={styles.noProductsContainer}><p style={styles.noProductsText}>A carregar produtos...</p></div>}</main>
     </div>
   );
 }
@@ -280,15 +313,18 @@ const ProductCatalog = ({ onForceRefresh }) => {
 export default function App() {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [isDbEmpty, setIsDbEmpty] = useState(false);
-    const [checkDone, setCheckDone] = useState(false);
+    const [showUploader, setShowUploader] = useState(false);
 
     const checkDatabase = async () => {
         const productsRef = collection(db, "products");
         const q = query(productsRef, limit(1));
         const snapshot = await getDocs(q);
-        setIsDbEmpty(snapshot.empty);
-        setCheckDone(true);
+        if (snapshot.empty) {
+            setShowUploader(true);
+        } else {
+            setShowUploader(false);
+        }
+        setLoading(false);
     };
 
     const handleLogin = (loggedInUser) => {
@@ -302,14 +338,17 @@ export default function App() {
                 handleLogin(currentUser);
             } else {
                 setUser(null);
-                setCheckDone(true);
+                setLoading(false);
             }
-            setLoading(false);
         });
         return () => unsubscribe();
     }, []);
+    
+    const forceImport = () => {
+        setShowUploader(true);
+    };
 
-    if (loading || !checkDone) {
+    if (loading) {
         return <div style={styles.loadingScreen}>A verificar...</div>;
     }
 
@@ -317,9 +356,9 @@ export default function App() {
         return <LoginScreen onLogin={handleLogin} />;
     }
 
-    if (isDbEmpty) {
+    if (showUploader) {
         return <DataUploader onUploadComplete={checkDatabase} />;
     }
 
-    return <ProductCatalog />;
+    return <ProductCatalog onForceImport={forceImport} />;
 }
