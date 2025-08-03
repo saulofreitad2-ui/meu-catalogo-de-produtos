@@ -123,36 +123,43 @@ const DataUploader = ({ onUploadComplete }) => {
                 setProgress(`A preparar para enviar ${total} produtos...`);
 
                 const productsRef = collection(db, "products");
-                const batch = writeBatch(db);
-                
-                products.forEach((product) => {
-                    const newProductRef = doc(productsRef);
-                    const formattedProduct = {
-                        produto: product.Produto || '',
-                        tipo: product.Tipo || '',
-                        indiceFluidez: product['Índice de Fluidez'] || '',
-                        densidade: product.Densidade || '',
-                        aplicacao: product.Aplicação || '',
-                        refAntiga: {
-                            produto: product.RefAntiga_produto || '',
-                            fabricante: product.RefAntiga_fabricante || '',
-                            fluidez: product.RefAntiga_fluidez || ''
-                        },
-                        refImportada: {
-                            produto: product.RefImportada_produto || '',
-                            indiceFluidez: product.RefImportada_indiceFluidez || '',
-                            densidade: product.RefImportada_densidade || '',
-                            fabricante: product.RefImportada_fabricante || ''
-                        },
-                        talco: product['% Talco'] || '',
-                        va: product['% VA (EVA)'] || '',
-                        observacoes: product.Observações || ''
-                    };
-                    batch.set(newProductRef, formattedProduct);
-                });
+                // O Firestore tem um limite de 500 operações por batch.
+                // Vamos dividir em múltiplos batches se necessário.
+                const batches = [];
+                for (let i = 0; i < products.length; i += 499) {
+                    const batch = writeBatch(db);
+                    const chunk = products.slice(i, i + 499);
+                    chunk.forEach((product) => {
+                        const newProductRef = doc(productsRef);
+                        const formattedProduct = {
+                            produto: product.Produto || '',
+                            tipo: product.Tipo || '',
+                            indiceFluidez: product['Índice de Fluidez'] || '',
+                            densidade: product.Densidade || '',
+                            aplicacao: product.Aplicação || '',
+                            refAntiga: {
+                                produto: product.RefAntiga_produto || '',
+                                fabricante: product.RefAntiga_fabricante || '',
+                                fluidez: product.RefAntiga_fluidez || ''
+                            },
+                            refImportada: {
+                                produto: product.RefImportada_produto || '',
+                                indiceFluidez: product.RefImportada_indiceFluidez || '',
+                                densidade: product.RefImportada_densidade || '',
+                                fabricante: product.RefImportada_fabricante || ''
+                            },
+                            talco: product['% Talco'] || '',
+                            va: product['% VA (EVA)'] || '',
+                            observacoes: product.Observações || ''
+                        };
+                        batch.set(newProductRef, formattedProduct);
+                    });
+                    batches.push(batch);
+                }
 
                 try {
-                    await batch.commit();
+                    setProgress('A enviar dados para o servidor...');
+                    await Promise.all(batches.map(b => b.commit()));
                     setProgress('Importação concluída com sucesso! A carregar o catálogo...');
                     setTimeout(() => {
                         onUploadComplete();
@@ -201,6 +208,35 @@ const DataUploader = ({ onUploadComplete }) => {
     );
 };
 
+const FilterModal = ({ show, onClose, onApply, onClear, currentFilters, productTypes }) => {
+  const [filters, setFiltersState] = useState(currentFilters);
+  useEffect(() => { setFiltersState(currentFilters); }, [currentFilters, show]);
+  if (!show) return null;
+  const handleChange = (field, value) => setFiltersState(prev => ({...prev, [field]: value}));
+  return (
+    <div style={styles.modalOverlay}><div style={styles.modalContent}><h2 style={styles.modalTitle}>Filtros Avançados</h2><div style={styles.formGroup}><label style={styles.label}>Tipo</label>
+        <select style={styles.modalSelect} value={filters.type || ''} onChange={e=>handleChange('type', e.target.value)}>
+            <option value="">Todos</option>
+            {productTypes.map(type => <option key={type} value={type}>{type}</option>)}
+        </select>
+    </div><div style={styles.formGroup}><label style={styles.label}>Faixa de Fluidez</label><div style={styles.rangeContainer}><input type="text" style={styles.modalInput} value={filters.fluidityMin || ''} onChange={e=>handleChange('fluidityMin', e.target.value)} placeholder="Mín."/><input type="text" style={styles.modalInput} value={filters.fluidityMax || ''} onChange={e=>handleChange('fluidityMax', e.target.value)} placeholder="Máx."/></div></div><div style={styles.formGroup}><label style={styles.label}>Faixa de Densidade</label><div style={styles.rangeContainer}><input type="text" style={styles.modalInput} value={filters.densityMin || ''} onChange={e=>handleChange('densityMin', e.target.value)} placeholder="Mín."/><input type="text" style={styles.modalInput} value={filters.densityMax || ''} onChange={e=>handleChange('densityMax', e.target.value)} placeholder="Máx."/></div></div><div style={styles.formGroup}><label style={styles.label}>Fabricante</label><input type="text" style={styles.modalInput} value={filters.manufacturer || ''} onChange={e=>handleChange('manufacturer', e.target.value)} placeholder="Ex: Polibrasil"/></div><div style={styles.modalActions}><button style={{...styles.modalButton, ...styles.applyButton}} onClick={() => {onApply(filters); onClose();}}>Aplicar</button><button style={{...styles.modalButton, ...styles.clearButton}} onClick={() => {onClear(); onClose();}}>Limpar</button></div></div></div>
+  );
+};
+
+const ProductFormModal = ({ show, onClose, product, onSave, productTypes }) => {
+    const [formData, setFormData] = useState({});
+    useEffect(() => { setFormData(product || { tipo: '', refAntiga: {}, refImportada: {} }); }, [product, show]);
+    if (!show) return null;
+    const handleChange = (e, section, field) => {
+        const { name, value } = e.target;
+        if (section) setFormData(prev => ({ ...prev, [section]: { ...prev[section], [field]: value } }));
+        else setFormData(prev => ({ ...prev, [name]: value }));
+    };
+    return (
+        <div style={styles.modalOverlay}><div style={styles.modalContent}><h2 style={styles.modalTitle}>{product ? 'Editar Produto' : 'Adicionar Produto'}</h2><div style={styles.formGrid}><div style={styles.formGroup}><label style={styles.label}>Produto</label><input name="produto" style={styles.modalInput} value={formData.produto || ''} onChange={handleChange}/></div><div style={styles.formGroup}><label style={styles.label}>Tipo</label><input name="tipo" style={styles.modalInput} value={formData.tipo || ''} onChange={handleChange}/></div><div style={styles.formGroup}><label style={styles.label}>Índice de Fluidez</label><input name="indiceFluidez" style={styles.modalInput} value={formData.indiceFluidez || ''} onChange={handleChange}/></div><div style={styles.formGroup}><label style={styles.label}>Densidade</label><input name="densidade" style={styles.modalInput} value={formData.densidade || ''} onChange={handleChange}/></div><div style={styles.formGroup}><label style={styles.label}>% Talco</label><input name="talco" style={styles.modalInput} value={formData.talco || ''} onChange={handleChange}/></div><div style={styles.formGroup}><label style={styles.label}>% VA (EVA)</label><input name="va" style={styles.modalInput} value={formData.va || ''} onChange={handleChange}/></div><div style={{...styles.formGroup, ...styles.formGroupFull}}><label style={styles.label}>Aplicação</label><input name="aplicacao" style={styles.modalInput} value={formData.aplicacao || ''} onChange={handleChange}/></div></div><h3 style={styles.productSectionTitle}>Referência Antiga</h3><div style={styles.formGrid}><div style={styles.formGroup}><label style={styles.label}>Produto</label><input style={styles.modalInput} value={formData.refAntiga?.produto || ''} onChange={e => handleChange(e, 'refAntiga', 'produto')}/></div><div style={styles.formGroup}><label style={styles.label}>Fabricante</label><input style={styles.modalInput} value={formData.refAntiga?.fabricante || ''} onChange={e => handleChange(e, 'refAntiga', 'fabricante')}/></div></div><h3 style={styles.productSectionTitle}>Referência Importada</h3><div style={styles.formGrid}><div style={styles.formGroup}><label style={styles.label}>Produto</label><input style={styles.modalInput} value={formData.refImportada?.produto || ''} onChange={e => handleChange(e, 'refImportada', 'produto')}/></div><div style={styles.formGroup}><label style={styles.label}>Fabricante</label><input style={styles.modalInput} value={formData.refImportada?.fabricante || ''} onChange={e => handleChange(e, 'refImportada', 'fabricante')}/></div></div><div style={{...styles.formGroup, ...styles.formGroupFull}}><label style={styles.label}>Observações</label><textarea name="observacoes" style={styles.modalInput} value={formData.observacoes || ''} onChange={handleChange}/></div><div style={styles.modalActions}><button style={{...styles.modalButton, ...styles.applyButton}} onClick={() => {onSave(formData); onClose();}}>Salvar</button><button style={{...styles.modalButton, ...styles.clearButton}} onClick={onClose}>Cancelar</button></div></div></div>
+    );
+};
+
 
 const ProductItem = ({ product, onEdit, onDelete }) => (
   <div style={styles.productContainer}>
@@ -224,6 +260,7 @@ const ProductItem = ({ product, onEdit, onDelete }) => (
 
 const ProductCatalog = ({ onForceImport }) => {
   const [allProducts, setAllProducts] = useState([]);
+  const [productTypes, setProductTypes] = useState([]);
   const [filteredProducts, setFilteredProducts] = useState([]);
   const [searchText, setSearchText] = useState('');
   const [filters, setFilters] = useState({ type: '', fluidityMin: '', fluidityMax: '', densityMin: '', densityMax: '', manufacturer: '' });
@@ -236,7 +273,12 @@ const ProductCatalog = ({ onForceImport }) => {
     const unsubscribe = onSnapshot(collection(db, "products"), (snapshot) => {
         const productsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setAllProducts(productsData);
-        setIsDataLoaded(true); // Marca que os dados foram carregados (ou que a lista está vazia)
+        if (productsData.length > 0) {
+            const types = [...new Set(productsData.map(p => p.tipo).filter(Boolean))];
+            types.sort();
+            setProductTypes(types);
+        }
+        setIsDataLoaded(true);
     });
     return () => unsubscribe();
   }, []);
@@ -282,7 +324,6 @@ const ProductCatalog = ({ onForceImport }) => {
     setFormModalVisible(true);
   };
 
-  // Se os dados já foram verificados e a lista está vazia, mostra a opção de forçar importação
   if (isDataLoaded && allProducts.length === 0) {
       return (
           <div style={styles.container}>
@@ -302,8 +343,8 @@ const ProductCatalog = ({ onForceImport }) => {
 
   return (
     <div style={styles.container}>
-      <FilterModal show={isFilterModalVisible} onClose={() => setFilterModalVisible(false)} onApply={setFilters} onClear={() => setFilters({})} currentFilters={filters}/>
-      <ProductFormModal show={isFormModalVisible} onClose={() => setFormModalVisible(false)} product={editingProduct} onSave={handleSaveProduct} />
+      <FilterModal show={isFilterModalVisible} onClose={() => setFilterModalVisible(false)} onApply={setFilters} onClear={() => setFilters({ type: '', fluidityMin: '', fluidityMax: '', densityMin: '', densityMax: '', manufacturer: '' })} currentFilters={filters} productTypes={productTypes} />
+      <ProductFormModal show={isFormModalVisible} onClose={() => setFormModalVisible(false)} product={editingProduct} onSave={handleSaveProduct} productTypes={productTypes} />
       <header style={styles.header}><h1 style={styles.headerTitle}>Catálogo de Produtos</h1><button style={styles.logoutButton} onClick={() => signOut(auth)} title="Sair"><span style={styles.buttonText}>Sair</span></button></header>
       <div style={styles.searchSection}><input style={styles.input} type="text" placeholder="Procurar..." value={searchText} onChange={(e) => setSearchText(e.target.value)}/><button style={styles.filterButton} onClick={() => setFilterModalVisible(true)}><span style={styles.buttonText}>Filtrar</span></button><button style={styles.addButton} onClick={() => handleOpenForm(null)}><span style={styles.buttonText}>Adicionar</span></button></div>
       <main style={styles.productList}>{filteredProducts.length > 0 ? filteredProducts.map(p => <ProductItem key={p.id} product={p} onEdit={handleOpenForm} onDelete={handleDeleteProduct} />) : <div style={styles.noProductsContainer}><p style={styles.noProductsText}>A carregar produtos...</p></div>}</main>
